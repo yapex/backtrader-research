@@ -1,49 +1,56 @@
 # backtrader-research
 
-通用自动研究框架 — 让 AI Agent 自主探索最优交易策略。
+帮普通用户找最优资产配置的回测框架。
 
-## 设计理念
+## 核心问题
 
-Agent 改 `strategy.py` → `engine.py` 跑回测 → 记录 `results.tsv` → 改进或回退 → 永不停止。
+> 选好 ETF 和债券后，**按什么比例、多久调一次、要不要止损**，收益最高、回撤最小？
 
-```
-engine.py      ← 固定引擎，不修改
-strategy.py    ← Agent 改这个
-research.yaml ← 实验配置（标的、权重、时间范围）
-program.md     ← Agent 指令
-results.tsv    ← 实验日志
-```
-
-## 特性
-
-- **任意资产组合** — 2 只到 N 只 ETF，通过 research.yaml 配置
-- **跨市场** — 美股（SPY/TLT）、A 股（510300.SS/511260.SS）等
-- **单一指标** — score（基于夏普，惩罚大回撤，奖励超额收益）
-- **Git 分支推进** — score 提升就前进，下降就 reset
-
-## 快速开始
+## 使用
 
 ```bash
 uv sync
 
-# 编辑 research.yaml 配置标的，然后跑
+# 用默认配置跑（美股股债平衡）
 uv run engine.py
 
-# Agent 自主研究：指向 program.md 开始
+# 跑特定 profile
+uv run engine.py --profile 6040_Q_none
+
+# 跑 example 配置
+uv run engine.py --config examples/cn_dividend.yaml
+
+# 批量穷举所有 profile
+bash sweep.sh
 ```
 
-## 输出示例
+## 策略
 
-```
----
-score:             0.607000
-sharpe:            0.507000
-annual_return:     0.083400
-max_drawdown:      -0.240400
-calmar:            0.347000
-beat_benchmark:    True
-excess_return:     0.000900
-benchmark_return:  0.082500
-benchmark_drawdown:-0.530000
----
-```
+面向普通用户，简单到可以手动执行：
+1. 按比例买入
+2. 定期再平衡（月/季/年）
+3. 可选：组合从高点回撤超过阈值就全清仓
+
+## Example 配置
+
+| 文件 | 市场 | 标的 |
+|------|------|------|
+| `examples/us_stockbond.yaml` | 美股 | SPY + TLT |
+| `examples/us_permanent.yaml` | 美股 | SPY + TLT + GLD + MINT |
+| `examples/cn_stockbond.yaml` | A 股 | 沪深300 + 国债 |
+| `examples/cn_permanent.yaml` | A 股 | 沪深300 + 国债 + 黄金 |
+| `examples/cn_dividend.yaml` | A 股 | 红利ETF + 国债 |
+
+## 项目结构
+
+| 文件 | 说明 |
+|------|------|
+| `engine.py` | 回测引擎（固定，不可修改） |
+| `strategy.py` | 策略实现（配置驱动） |
+| `research.yaml` | 默认实验配置 |
+| `program.md` | 研究指引 |
+| `team.md` | ClawTeam 多 Agent 并行指引 |
+| `sweep.sh` | 批量穷举脚本 |
+| `summary.md` | 回测结果汇总 |
+| `examples/` | 各市场示例配置 |
+| `results/` | 实验结果数据 |

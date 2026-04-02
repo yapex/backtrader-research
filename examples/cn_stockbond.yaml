@@ -1,0 +1,18 @@
+# A股 · 股债平衡（沪深300 + 国债）
+# 数据源: akshare (新浪)
+
+assets:
+  - ticker: 510300.SS
+    role: equity
+    weight: 0.6
+  - ticker: 511010.SS
+    role: bond
+    weight: 0.4
+
+benchmark: 510300.SS
+currency: CNY
+cash: 100000
+
+period:
+  start: "2014-01-01"
+  end: "2024-12-31"

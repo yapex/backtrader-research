@@ -1,0 +1,21 @@
+# A股 · 永久组合（沪深300 + 国债 + 黄金）
+# 数据源: akshare (新浪)
+
+assets:
+  - ticker: 510300.SS
+    role: equity
+    weight: 0.25
+  - ticker: 511010.SS
+    role: bond
+    weight: 0.25
+  - ticker: 518880.SS
+    role: gold
+    weight: 0.25
+
+benchmark: 510300.SS
+currency: CNY
+cash: 100000
+
+period:
+  start: "2014-01-01"
+  end: "2024-12-31"

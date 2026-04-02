@@ -11,8 +11,16 @@ venv/
 .env
 *.pkl
 .DS_Store
-grid_results.csv
-grid_results.json
-results_agent_*.md
-results.tsv
+
+# Run artifacts
+logs/
 run.log
+results.tsv
+results-*.tsv
+research_*.yaml
+
+# Lock file (regenerate with uv sync)
+uv.lock
+
+# Keep results directory but ignore sweep output
+results/results.tsv

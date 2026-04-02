@@ -1,17 +1,914 @@
-# Experiment config - define the asset universe for this research
-
 assets:
-  - ticker: SPY
-    role: equity
-    weight: 0.5
-  - ticker: TLT
-    role: bond
-    weight: 0.5
-
+- ticker: SPY
+  role: equity
+  weight: 0.6
+- ticker: TLT
+  role: bond
+  weight: 0.4
 benchmark: SPY
 currency: USD
 cash: 100000
-
 period:
-  start: "2003-01-01"
-  end: "2024-12-31"
+  start: '2015-01-01'
+  end: '2024-12-31'
+profiles:
+  7030_M_none:
+    description: 70/30 monthly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: monthly
+      stop_loss: null
+  7030_M_10:
+    description: 70/30 monthly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.1
+  7030_M_15:
+    description: 70/30 monthly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.15
+  7030_M_20:
+    description: 70/30 monthly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.2
+  7030_M_25:
+    description: 70/30 monthly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.25
+  7030_Q_none:
+    description: 70/30 quarterly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: quarterly
+      stop_loss: null
+  7030_Q_10:
+    description: 70/30 quarterly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.1
+  7030_Q_15:
+    description: 70/30 quarterly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.15
+  7030_Q_20:
+    description: 70/30 quarterly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.2
+  7030_Q_25:
+    description: 70/30 quarterly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.25
+  7030_Y_none:
+    description: 70/30 yearly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: yearly
+      stop_loss: null
+  7030_Y_10:
+    description: 70/30 yearly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.1
+  7030_Y_15:
+    description: 70/30 yearly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.15
+  7030_Y_20:
+    description: 70/30 yearly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.2
+  7030_Y_25:
+    description: 70/30 yearly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.7
+    - ticker: TLT
+      role: bond
+      weight: 0.3
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.25
+  6040_M_none:
+    description: 60/40 monthly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: monthly
+      stop_loss: null
+  6040_M_10:
+    description: 60/40 monthly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.1
+  6040_M_15:
+    description: 60/40 monthly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.15
+  6040_M_20:
+    description: 60/40 monthly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.2
+  6040_M_25:
+    description: 60/40 monthly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.25
+  6040_Q_none:
+    description: 60/40 quarterly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: quarterly
+      stop_loss: null
+  6040_Q_10:
+    description: 60/40 quarterly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.1
+  6040_Q_15:
+    description: 60/40 quarterly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.15
+  6040_Q_20:
+    description: 60/40 quarterly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.2
+  6040_Q_25:
+    description: 60/40 quarterly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.25
+  6040_Y_none:
+    description: 60/40 yearly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: yearly
+      stop_loss: null
+  6040_Y_10:
+    description: 60/40 yearly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.1
+  6040_Y_15:
+    description: 60/40 yearly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.15
+  6040_Y_20:
+    description: 60/40 yearly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.2
+  6040_Y_25:
+    description: 60/40 yearly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.6
+    - ticker: TLT
+      role: bond
+      weight: 0.4
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.25
+  5050_M_none:
+    description: 50/50 monthly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: monthly
+      stop_loss: null
+  5050_M_10:
+    description: 50/50 monthly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.1
+  5050_M_15:
+    description: 50/50 monthly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.15
+  5050_M_20:
+    description: 50/50 monthly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.2
+  5050_M_25:
+    description: 50/50 monthly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.25
+  5050_Q_none:
+    description: 50/50 quarterly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: quarterly
+      stop_loss: null
+  5050_Q_10:
+    description: 50/50 quarterly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.1
+  5050_Q_15:
+    description: 50/50 quarterly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.15
+  5050_Q_20:
+    description: 50/50 quarterly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.2
+  5050_Q_25:
+    description: 50/50 quarterly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.25
+  5050_Y_none:
+    description: 50/50 yearly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: yearly
+      stop_loss: null
+  5050_Y_10:
+    description: 50/50 yearly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.1
+  5050_Y_15:
+    description: 50/50 yearly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.15
+  5050_Y_20:
+    description: 50/50 yearly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.2
+  5050_Y_25:
+    description: 50/50 yearly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.5
+    - ticker: TLT
+      role: bond
+      weight: 0.5
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.25
+  4060_M_none:
+    description: 40/60 monthly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: monthly
+      stop_loss: null
+  4060_M_10:
+    description: 40/60 monthly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.1
+  4060_M_15:
+    description: 40/60 monthly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.15
+  4060_M_20:
+    description: 40/60 monthly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.2
+  4060_M_25:
+    description: 40/60 monthly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.25
+  4060_Q_none:
+    description: 40/60 quarterly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: quarterly
+      stop_loss: null
+  4060_Q_10:
+    description: 40/60 quarterly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.1
+  4060_Q_15:
+    description: 40/60 quarterly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.15
+  4060_Q_20:
+    description: 40/60 quarterly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.2
+  4060_Q_25:
+    description: 40/60 quarterly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.25
+  4060_Y_none:
+    description: 40/60 yearly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: yearly
+      stop_loss: null
+  4060_Y_10:
+    description: 40/60 yearly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.1
+  4060_Y_15:
+    description: 40/60 yearly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.15
+  4060_Y_20:
+    description: 40/60 yearly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.2
+  4060_Y_25:
+    description: 40/60 yearly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.4
+    - ticker: TLT
+      role: bond
+      weight: 0.6
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.25
+  3070_M_none:
+    description: 30/70 monthly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: monthly
+      stop_loss: null
+  3070_M_10:
+    description: 30/70 monthly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.1
+  3070_M_15:
+    description: 30/70 monthly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.15
+  3070_M_20:
+    description: 30/70 monthly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.2
+  3070_M_25:
+    description: 30/70 monthly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: monthly
+      stop_loss: 0.25
+  3070_Q_none:
+    description: 30/70 quarterly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: quarterly
+      stop_loss: null
+  3070_Q_10:
+    description: 30/70 quarterly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.1
+  3070_Q_15:
+    description: 30/70 quarterly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.15
+  3070_Q_20:
+    description: 30/70 quarterly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.2
+  3070_Q_25:
+    description: 30/70 quarterly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: quarterly
+      stop_loss: 0.25
+  3070_Y_none:
+    description: 30/70 yearly none止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: yearly
+      stop_loss: null
+  3070_Y_10:
+    description: 30/70 yearly 10止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.1
+  3070_Y_15:
+    description: 30/70 yearly 15止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.15
+  3070_Y_20:
+    description: 30/70 yearly 20止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.2
+  3070_Y_25:
+    description: 30/70 yearly 25止损
+    assets:
+    - ticker: SPY
+      role: equity
+      weight: 0.3
+    - ticker: TLT
+      role: bond
+      weight: 0.7
+    params:
+      rebalance_freq: yearly
+      stop_loss: 0.25

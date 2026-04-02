@@ -1,12 +1,18 @@
 """
-Trading strategy - Agent modifies this file
+Trading strategy — Agent modifies this file.
+
+面向普通用户，策略简单到可以手动执行。
+所有行为由 research.yaml 的 params 控制。
 
 engine.py injects research.yaml config into Strategy._config:
-  - _config["tickers"]  e.g. ["SPY", "TLT"]
-  - _config["weights"]  e.g. {"SPY": 0.5, "TLT": 0.5}
-  - _config["roles"]    e.g. {"SPY": "equity", "TLT": "bond"}
+  - _config["tickers"]  e.g. ["SPY", "TLT", "GLD"]
+  - _config["weights"]  e.g. {"SPY": 0.25, "TLT": 0.25, "GLD": 0.25}
+  - _config["roles"]    e.g. {"SPY": "equity", "TLT": "bond", "GLD": "gold"}
+  - _config["params"]   e.g. {"rebalance_freq": "yearly", "stop_loss": null}
 
-You can change anything: params, indicators, buy/sell logic, position sizing.
+权重之和 <= 1.0，剩余部分自动留为现金。
+例如 25/25/25 = 75%，剩余 25% 现金。
+
 Only requirement: define a class called Strategy that inherits bt.Strategy.
 """
 
@@ -14,101 +20,82 @@ import backtrader as bt
 
 
 class Strategy(bt.Strategy):
-    """再平衡策略 + 可选止损。"""
+    """配置驱动的定期再平衡策略，可选止损。
+
+    行为由 research.yaml → params 控制：
+
+      rebalance_freq: "monthly" | "quarterly" | "yearly"
+      stop_loss: null | 0.15             — 组合从高点回撤超过此值，全部清仓留现金
+    """
 
     params = (
-        ("stock_weight", 0.5),
-        ("bond_weight", 0.5),
         ("rebalance_freq", "quarterly"),
         ("stop_loss", None),
-        ("stop_loss_mode", "rebalance"),
     )
 
     def __init__(self):
-        cfg = self._config
-        self.equity = self.datas[0]
-        self.bond = self.datas[1]
+        yaml_params = self._config.get("params", {})
+        for key, val in yaml_params.items():
+            if key in self.params._getpairs():
+                setattr(self.params, key, val)
 
-        self.last_quarter = None
-        self.last_month = None
-        self.last_year = None
-        self.entry_price = None
+        # 通用：支持 N 个资产，每个带权重
+        self.targets = {}  # data → target_weight
+        for data in self.datas:
+            name = data._name
+            w = self._config["weights"].get(name, 0.0)
+            self.targets[data] = w
+
+        self.last_period = None
+        self.peak_value = None
         self.stopped_out = False
-        self._initial_value = None
 
     @property
     def today(self):
         return self.datas[0].datetime.date(0)
 
-    def _should_rebalance(self):
+    def _period_key(self):
         d = self.today
         freq = self.params.rebalance_freq
         if freq == "monthly":
-            if self.last_month is None:
-                return True
-            return d.month != self.last_month
+            return (d.year, d.month)
         elif freq == "quarterly":
-            if self.last_quarter is None:
-                return True
-            return (d.month - 1) // 3 != self.last_quarter
+            return (d.year, (d.month - 1) // 3)
         elif freq == "yearly":
-            if self.last_year is None:
-                return True
-            return d.year != self.last_year
-        return False
+            return (d.year,)
+        return (d.year, d.month)
 
     def _do_rebalance(self):
-        if self.stopped_out:
-            self.stopped_out = False
-        self.order_target_percent(self.equity, self.params.stock_weight)
-        self.order_target_percent(self.bond, self.params.bond_weight)
-        d = self.today
-        self.last_quarter = (d.month - 1) // 3
-        self.last_month = d.month
-        self.last_year = d.year
-        pos = self.getposition(self.equity)
-        if pos.size > 0:
-            self.entry_price = self.equity.close[0]
+        for data, weight in self.targets.items():
+            self.order_target_percent(data, weight)
+        self.last_period = self._period_key()
+        self.stopped_out = False
+        if self.peak_value is None:
+            self.peak_value = self.broker.getvalue()
 
     def _check_stop(self):
         if self.params.stop_loss is None:
             return
-        mode = self.params.stop_loss_mode
-        pos = self.getposition(self.equity)
-        if pos.size == 0 or self.entry_price is None:
-            return
-
-        if mode == "portfolio":
-            total = self.broker.getvalue()
-            if self._initial_value is None:
-                self._initial_value = total
-            dd = (total - self._initial_value) / self._initial_value
-            if dd < -self.params.stop_loss:
-                self.close(self.equity)
-                self.close(self.bond)
-                self.stopped_out = True
-                self._initial_value = total
-
-        elif mode == "position":
-            loss = (self.equity.close[0] - self.entry_price) / self.entry_price
-            if loss < -self.params.stop_loss:
-                self.close(self.equity)
-                self.stopped_out = True
-
-        elif mode == "rebalance":
-            loss = (self.equity.close[0] - self.entry_price) / self.entry_price
-            if loss < -self.params.stop_loss:
-                self.order_target_percent(self.equity, 0.5)
-                self.order_target_percent(self.bond, 0.5)
-                self.stopped_out = True
+        total = self.broker.getvalue()
+        if self.peak_value is None:
+            self.peak_value = total
+        self.peak_value = max(self.peak_value, total)
+        dd = (total - self.peak_value) / self.peak_value
+        if dd < -self.params.stop_loss:
+            # 全部清仓，留现金
+            for data in self.targets:
+                self.order_target_percent(data, 0.0)
+            self.stopped_out = True
 
     def next(self):
-        if (self.getposition(self.equity).size == 0
-                and self.getposition(self.bond).size == 0):
+        # 首次建仓
+        has_position = any(self.getposition(d).size > 0 for d in self.targets)
+        if not has_position:
             self._do_rebalance()
             return
 
         self._check_stop()
 
-        if self._should_rebalance():
+        key = self._period_key()
+        if key != self.last_period and not self.stopped_out:
             self._do_rebalance()

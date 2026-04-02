@@ -1,0 +1,18 @@
+# 美股 · 股债平衡（SPY + TLT）
+# 搜索空间: 5 比例 × 3 频率 × 5 止损 = 75 组合
+
+assets:
+  - ticker: SPY
+    role: equity
+    weight: 0.6
+  - ticker: TLT
+    role: bond
+    weight: 0.4
+
+benchmark: SPY
+currency: USD
+cash: 100000
+
+period:
+  start: "2015-01-01"
+  end: "2024-12-31"
