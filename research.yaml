@@ -1,0 +1,17 @@
+# Experiment config - define the asset universe for this research
+
+assets:
+  - ticker: SPY
+    role: equity
+    weight: 0.5
+  - ticker: TLT
+    role: bond
+    weight: 0.5
+
+benchmark: SPY
+currency: USD
+cash: 100000
+
+period:
+  start: "2003-01-01"
+  end: "2024-12-31"
