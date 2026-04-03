@@ -115,6 +115,12 @@ class _StockCommission(bt.comminfo.CommInfoBase):
 
 USD_CNY = 7.30
 
+# Default benchmarks per currency
+BENCHMARK_DEFAULT: dict[str, str] = {
+    "CNY": "000300.SS",   # 沪深300
+    "USD": "^GSPC",       # S&P 500
+}
+
 
 def normalize_cash(base_currency: str, cash: float) -> float:
     if base_currency.upper() == "CNY":
@@ -128,7 +134,14 @@ def normalize_cash(base_currency: str, cash: float) -> float:
 
 def _is_cn_ticker(ticker: str) -> bool:
     """Check if ticker is a Chinese A-share ETF."""
-    return ticker.endswith('.SS') or ticker.endswith('.SZ')
+    ticker_lower = ticker.lower()
+    return ticker_lower.endswith(('.sh', '.sz', '.ss'))
+
+
+def _is_cn_index(ticker: str) -> bool:
+    """Check if ticker is a Chinese index (e.g., 000922.SS)."""
+    ticker_lower = ticker.lower()
+    return ticker_lower.endswith(('.ss', '.sz', '.sh')) and not ticker_lower.startswith(('51', '15', '13', '50'))
 
 
 def _download_yahoo(ticker: str, start: str, end: str) -> pd.DataFrame:
@@ -141,12 +154,43 @@ def _download_yahoo(ticker: str, start: str, end: str) -> pd.DataFrame:
     return df
 
 
+def _download_cn_index(ticker: str, start: str, end: str) -> pd.DataFrame:
+    """Download A-share index data via akshare."""
+    import akshare as ak
+    # Convert ticker format: 000922.SS -> sh000922
+    code = ticker.split('.')[0]
+    suffix = ticker.split('.')[-1].upper()
+    prefix = 'sh' if suffix in ('SS', 'SH') else 'sz'
+    sym = f"{prefix}{code}"
+
+    df = ak.stock_zh_index_daily(symbol=sym)
+    if df is None or df.empty:
+        raise ValueError(f"Cannot download {ticker} from akshare (index)")
+
+    # Normalize columns
+    df = df.rename(columns={
+        'date': 'Date', 'open': 'Open', 'high': 'High',
+        'low': 'Low', 'close': 'Close', 'volume': 'Volume',
+    })
+    df['Date'] = pd.to_datetime(df['Date'])
+    df = df.set_index('Date')
+    df = df.sort_index()
+
+    # Filter by period
+    start_dt = pd.to_datetime(start)
+    end_dt = pd.to_datetime(end)
+    df = df.loc[(df.index >= start_dt) & (df.index <= end_dt)]
+
+    return df
+
+
 def _download_akshare(ticker: str, start: str, end: str) -> pd.DataFrame:
     """Download A-share ETF data via akshare (sina interface)."""
     import akshare as ak
     # Convert ticker format: 510300.SS -> sh510300, 159209.SZ -> sz159209
     code = ticker.split('.')[0]
-    prefix = 'sh' if ticker.endswith('.SS') else 'sz'
+    suffix = ticker.split('.')[-1].upper()
+    prefix = 'sh' if suffix in ('SS', 'SH') else 'sz'
     sina_sym = f"{prefix}{code}"
 
     df = ak.fund_etf_hist_sina(symbol=sina_sym)
@@ -181,7 +225,9 @@ def load_data(tickers: list[str], start: str, end: str) -> dict[str, pd.DataFram
             print(f"[cache] {ticker}: {len(data[ticker])} rows")
         else:
             print(f"[download] {ticker}...")
-            if _is_cn_ticker(ticker):
+            if _is_cn_index(ticker):
+                df = _download_cn_index(ticker, start, end)
+            elif _is_cn_ticker(ticker):
                 df = _download_akshare(ticker, start, end)
             else:
                 df = _download_yahoo(ticker, start, end)
@@ -370,7 +416,7 @@ def run_backtest(config: dict, strategy_cls, profile: dict | None = None) -> dic
     period = effective["period"]
     base_currency = effective.get("currency", "USD").upper()
     cash_cny = effective.get("cash", 100000)
-    bench_ticker = effective.get("benchmark", tickers[0])
+    bench_ticker = effective.get("benchmark", BENCHMARK_DEFAULT.get(base_currency, tickers[0]))
     commission = get_commission(base_currency)
 
     cash = normalize_cash(base_currency, cash_cny)
@@ -466,7 +512,8 @@ def main():
         print(f"[config] tickers:   {', '.join(tickers)}")
         weight_str = ', '.join(f'{a["ticker"]}:{a["weight"]}' for a in assets)
         print(f"[config] weights:   {weight_str}")
-        print(f"[config] benchmark: {effective.get('benchmark', 'N/A')}")
+        bench_display = effective.get("benchmark", f"(default {BENCHMARK_DEFAULT.get(effective.get('currency', 'USD').upper(), 'tickers[0]')})")
+        print(f"[config] benchmark: {bench_display}")
         print(f"[config] period:    {period['start']} ~ {period['end']}")
         print(f"[config] currency:  {currency}, cash: {cash:,}")
         commission = get_commission(currency)

@@ -1,0 +1,19 @@
+# A股 · 中证红利 + 国债
+# 000922 中证红利指数（直接用指数回测）
+# 数据源: akshare (东方财富)
+# benchmark: 留空，默认用沪深300（CNY）或标普500（USD）
+
+assets:
+  - ticker: 000922.SS  # 中证红利指数
+    role: equity
+    weight: 0.6
+  - ticker: 511010.SS  # 国债ETF
+    role: bond
+    weight: 0.4
+
+currency: CNY
+cash: 100000
+
+period:
+  start: "2015-01-01"
+  end: "2024-12-31"
