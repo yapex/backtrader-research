@@ -12,9 +12,7 @@ Usage::
 
 from __future__ import annotations
 
-import inspect
 import sys
-import textwrap
 from pathlib import Path
 
 import backtrader as bt
@@ -64,40 +62,46 @@ def select_profile(config: dict, profile_name: str | None) -> tuple[str, dict]:
     return profile_name, profiles[profile_name]
 
 
-# ======================================================================
-# Patch backtrader margin check
-# ======================================================================
 
-def _patch_backtrader():
-    from backtrader.brokers.bbroker import BackBroker
-    src = inspect.getsource(BackBroker._execute)
-    if "if cash < 0.0:" not in src:
-        return
-    patched = textwrap.dedent(src).replace(
-        "if cash < 0.0:",
-        "if cash < -999999.0:  # btresearch patch: allow commission overflow",
-    )
-    ns = {}
-    exec(compile(patched, "<patch>", "exec"), ns)
-    BackBroker._execute = ns["_execute"]
-
-_patch_backtrader()
 
 
 # ======================================================================
-# Commission
+# Market defaults (currency-driven constants)
 # ======================================================================
 
-# 交易费用：按市场区分（单边）
-COMMISSION_TABLE = {
-    "USD": 0.0000,  # 美股 ETF 券商大多 0 佣金
-    "CNY": 0.0010,  # A 股 ETF 印花税+佣金约万十
+# Default benchmarks per currency
+BENCHMARK_DEFAULT: dict[str, str] = {
+    "CNY": "000300.SS",   # 沪深300
+    "USD": "^GSPC",       # S&P 500
 }
-COMMISSION_DEFAULT = 0.0003  # 未匹配时的默认值
+
+# 无风险利率（年化），可被 config.risk_free_rate 覆盖
+RISK_FREE_RATE: dict[str, float] = {
+    "CNY": 0.025,   # 中国 10 年国债约 2.5%
+    "USD": 0.040,   # 美国 10 年国债约 4.0%
+}
+
+# 交易费用（单边，可被 config.commission 覆盖）
+COMMISSION_TABLE: dict[str, float] = {
+    "USD": 0.0000,   # 美股 ETF 券商大多 0 佣金
+    "CNY": 0.0010,   # A 股 ETF 印花税+佣金约万十
+}
+COMMISSION_DEFAULT = 0.0003
+
+# 默认 FX（可被 config.usd_cny 覆盖）
+DEFAULT_USD_CNY = 7.30
 
 
 def get_commission(currency: str) -> float:
     return COMMISSION_TABLE.get(currency.upper(), COMMISSION_DEFAULT)
+
+
+def get_risk_free_rate(currency: str) -> float:
+    return RISK_FREE_RATE.get(currency.upper(), 0.03)
+
+
+def get_default_benchmark(currency: str) -> str:
+    return BENCHMARK_DEFAULT.get(currency.upper(), "^GSPC")
 
 
 class _StockCommission(bt.comminfo.CommInfoBase):
@@ -109,22 +113,10 @@ class _StockCommission(bt.comminfo.CommInfoBase):
     )
 
 
-# ======================================================================
-# FX rate
-# ======================================================================
-
-USD_CNY = 7.30
-
-# Default benchmarks per currency
-BENCHMARK_DEFAULT: dict[str, str] = {
-    "CNY": "000300.SS",   # 沪深300
-    "USD": "^GSPC",       # S&P 500
-}
-
-
-def normalize_cash(base_currency: str, cash: float) -> float:
-    if base_currency.upper() == "CNY":
-        return cash / USD_CNY
+def normalize_cash(currency: str, cash: float, usd_cny: float) -> float:
+    """Convert cash to USD for cerebro broker."""
+    if currency.upper() == "CNY":
+        return cash / usd_cny
     return cash
 
 
@@ -276,28 +268,33 @@ class _Tracker(bt.Analyzer):
 # Metrics
 # ======================================================================
 
-RISK_FREE_RATE = 0.04
+# ======================================================================
+# Metrics
+# ======================================================================
+
+TRADING_DAYS_PER_YEAR = 252  # 年化交易日数量（全球主流市场均适用）
+SHARPE_MIN_DATA_POINTS = 10  # Sharpe 计算最小数据点
 
 
 def _annual_return(values: pd.Series) -> float:
     if len(values) < 2:
         return 0.0
     total = values.iloc[-1] / values.iloc[0] - 1
-    years = len(values) / 252
+    years = len(values) / TRADING_DAYS_PER_YEAR
     if years <= 0:
         return 0.0
     return float((1 + total) ** (1 / years) - 1)
 
 
-def _sharpe(values: pd.Series) -> float:
-    if len(values) < 10:
+def _sharpe(values: pd.Series, risk_free_rate: float) -> float:
+    if len(values) < SHARPE_MIN_DATA_POINTS:
         return 0.0
     returns = values.pct_change().dropna()
     ann_ret = _annual_return(values)
-    ann_vol = returns.std() * np.sqrt(252)
+    ann_vol = returns.std() * np.sqrt(TRADING_DAYS_PER_YEAR)
     if ann_vol == 0:
         return 0.0
-    return float((ann_ret - RISK_FREE_RATE) / ann_vol)
+    return float((ann_ret - risk_free_rate) / ann_vol)
 
 
 def _max_drawdown(values: pd.Series) -> float:
@@ -316,9 +313,27 @@ def _calmar(values: pd.Series) -> float:
     return float(ann_ret / mdd)
 
 
-def evaluate(portfolio: pd.Series, benchmark: pd.Series | None = None) -> dict:
+def evaluate(portfolio: pd.Series, benchmark: pd.Series | None = None,
+             currency: str = "USD", risk_free_rate: float | None = None,
+             score_penalty_thresholds: tuple[float, float] = (-0.30, -0.40),
+             score_penalty_amounts: tuple[float, float] = (0.1, 0.3),
+             score_bonus: float = 0.05) -> dict:
+    """Compute backtest metrics.
+
+    Args:
+        portfolio:     Portfolio value series
+        benchmark:    Benchmark value series (optional)
+        currency:     Base currency for risk-free rate lookup
+        risk_free_rate: Override risk-free rate; if None, lookup from RISK_FREE_RATE table
+        score_penalty_thresholds: MDD thresholds triggering penalties, e.g. (-0.30, -0.40)
+        score_penalty_amounts:     Penalty amounts paired with thresholds
+        score_bonus:  Bonus points for beating benchmark
+    """
+    if risk_free_rate is None:
+        risk_free_rate = get_risk_free_rate(currency)
+
     ann_ret = _annual_return(portfolio)
-    sharpe = _sharpe(portfolio)
+    sharpe = _sharpe(portfolio, risk_free_rate)
     max_dd = _max_drawdown(portfolio)
     calmar = _calmar(portfolio)
 
@@ -334,14 +349,13 @@ def evaluate(portfolio: pd.Series, benchmark: pd.Series | None = None) -> dict:
 
     # Score: sharpe base, drawdown penalty, excess bonus
     score = sharpe
-    if max_dd < -0.30:
-        score -= 0.1
-    if max_dd < -0.40:
-        score -= 0.3
+    for threshold, penalty in zip(score_penalty_thresholds, score_penalty_amounts):
+        if max_dd < threshold:
+            score -= penalty
     if beat:
-        score += 0.05
+        score += score_bonus
     if excess and excess > 0.01:
-        score += 0.05
+        score += score_bonus
 
     return {
         "score": score,
@@ -360,22 +374,11 @@ def evaluate(portfolio: pd.Series, benchmark: pd.Series | None = None) -> dict:
 # Buy-and-hold benchmark
 # ======================================================================
 
-class _BuyHold(bt.Strategy):
-    def __init__(self):
-        self._done = False
-
-    def next(self):
-        if self._done:
-            return
-        self.order_target_percent(self.datas[0], 1.0)
-        self._done = True
-
-
 # ======================================================================
 # Backtest execution
 # ======================================================================
 
-def _run(strategy_cls, data: dict[str, pd.DataFrame], cash: float, commission: float = COMMISSION_DEFAULT) -> pd.Series:
+def _run(strategy_cls, data: dict[str, pd.DataFrame], cash: float, commission: float) -> pd.Series:
     cerebro = bt.Cerebro()
     cerebro.broker.setcash(cash)
     cerebro.broker.set_checksubmit(False)
@@ -387,6 +390,43 @@ def _run(strategy_cls, data: dict[str, pd.DataFrame], cash: float, commission: f
     cerebro.addanalyzer(_Tracker, _name="tracker")
     cerebro.addstrategy(strategy_cls)
     results = cerebro.run()
+    return results[0].analyzers.tracker.get_analysis()
+
+
+def _run_buyhold(data: dict[str, pd.DataFrame], cash: float, commission: float) -> pd.Series:
+    """Run a simple buy-and-hold benchmark: invest 100% in the first ticker."""
+    cerebro = bt.Cerebro()
+    cerebro.broker.setcash(cash)
+    cerebro.broker.set_checksubmit(False)
+    cerebro.broker.addcommissioninfo(_StockCommission(commission=commission))
+
+    for ticker, df in data.items():
+        cerebro.adddata(_make_feed(df, ticker), name=ticker)
+
+    cerebro.addanalyzer(_Tracker, _name="tracker")
+    cerebro.addstrategy(bt.Strategy)   # empty strategy — no trading needed
+    cerebro.addobserver(bt.observers.Value)  # track portfolio value
+
+    # Pre-load all data, then check the final value after full period
+    # Use a minimal strategy that buys 100% on first bar
+    class _BuyAll(bt.Strategy):
+        def __init__(self):
+            self._bought = False
+
+        def next(self):
+            if not self._bought:
+                self.order_target_percent(self.datas[0], 1.0)
+                self._bought = True
+
+    cerebro2 = bt.Cerebro()
+    cerebro2.broker.setcash(cash)
+    cerebro2.broker.set_checksubmit(False)
+    cerebro2.broker.addcommissioninfo(_StockCommission(commission=commission))
+    for ticker, df in data.items():
+        cerebro2.adddata(_make_feed(df, ticker), name=ticker)
+    cerebro2.addanalyzer(_Tracker, _name="tracker")
+    cerebro2.addstrategy(_BuyAll)
+    results = cerebro2.run()
     return results[0].analyzers.tracker.get_analysis()
 
 
@@ -402,7 +442,16 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def run_backtest(config: dict, strategy_cls, profile: dict | None = None) -> dict:
-    """Run full backtest with benchmark comparison."""
+    """Run full backtest with benchmark comparison.
+
+    Config keys (all optional):
+        currency:         "CNY" | "USD"  (default: "USD")
+        cash:             float  (default: 100000)
+        usd_cny:          float  (default: 7.30)
+        risk_free_rate:   float  (overrides market default)
+        benchmark:         str    (overrides market default)
+        commission:       float  (overrides market default)
+    """
     # Profile can override top-level keys (assets, params, etc.)
     if profile:
         effective = _deep_merge(config, profile)
@@ -416,10 +465,12 @@ def run_backtest(config: dict, strategy_cls, profile: dict | None = None) -> dic
     period = effective["period"]
     base_currency = effective.get("currency", "USD").upper()
     cash_cny = effective.get("cash", 100000)
-    bench_ticker = effective.get("benchmark", BENCHMARK_DEFAULT.get(base_currency, tickers[0]))
-    commission = get_commission(base_currency)
+    usd_cny = effective.get("usd_cny", DEFAULT_USD_CNY)
+    risk_free_rate = effective.get("risk_free_rate")  # None → use market table
+    bench_ticker = effective.get("benchmark", get_default_benchmark(base_currency))
+    commission = effective.get("commission", get_commission(base_currency))
 
-    cash = normalize_cash(base_currency, cash_cny)
+    cash = normalize_cash(base_currency, cash_cny, usd_cny)
 
     # Ensure benchmark data is loaded (may not be in assets)
     all_tickers = list(set(tickers + [bench_ticker]))
@@ -440,9 +491,9 @@ def run_backtest(config: dict, strategy_cls, profile: dict | None = None) -> dic
     portfolio = _run(strategy_cls, data, cash, commission)
 
     bench_data = {bench_ticker: data[bench_ticker]}
-    benchmark = _run(_BuyHold, bench_data, cash, commission)
+    benchmark = _run_buyhold(bench_data, cash, commission)
 
-    return evaluate(portfolio, benchmark)
+    return evaluate(portfolio, benchmark, currency=base_currency, risk_free_rate=risk_free_rate)
 
 
 # ======================================================================
@@ -512,14 +563,17 @@ def main():
         print(f"[config] tickers:   {', '.join(tickers)}")
         weight_str = ', '.join(f'{a["ticker"]}:{a["weight"]}' for a in assets)
         print(f"[config] weights:   {weight_str}")
-        bench_display = effective.get("benchmark", f"(default {BENCHMARK_DEFAULT.get(effective.get('currency', 'USD').upper(), 'tickers[0]')})")
+        bench_display = effective.get("benchmark", f"(default {get_default_benchmark(currency)})")
         print(f"[config] benchmark: {bench_display}")
         print(f"[config] period:    {period['start']} ~ {period['end']}")
         print(f"[config] currency:  {currency}, cash: {cash:,}")
         commission = get_commission(currency)
         print(f"[config] commission: {commission*10000:.0f} bps ({commission*100:.2f}%)")
-        print(f"[config] USD/CNY:   {USD_CNY}")
-        print(f"[config] params:    {profile_params}")
+        usd_cny = effective.get("usd_cny", DEFAULT_USD_CNY)
+        rf_rate = effective.get("risk_free_rate", get_risk_free_rate(currency))
+        print(f"[config] USD/CNY:     {usd_cny}")
+        print(f"[config] risk_free:  {rf_rate:.2%} (per year)")
+        print(f"[config] params:     {profile_params}")
         print()
 
         metrics = run_backtest(config, Strategy, profile)
