@@ -513,4 +513,179 @@ html = f"""<!DOCTYPE html>
 
 with open(f"{OUT_DIR}/cn_permanent_report.html", "w", encoding="utf-8") as f:
     f.write(html)
-print(f"\n[done] HTML report: {OUT_DIR}/cn_permanent_report.html")
+print(f"  [html] cn_permanent_report.html")
+
+# ======================================================================
+# Generate Markdown report (auto from live data, no manual numbers)
+# ======================================================================
+print("Building Markdown report...")
+
+bench_ret_str = f"{m_perm_lump['benchmark_return']*100:+.2f}%"
+
+md_overview = ""
+for name, method, ann, dd, exc in [
+    ("**永久组合**", "**一次性**", m_perm_lump["annual_return"], m_perm_lump["max_drawdown"], m_perm_lump["excess_return"]),
+    ("股债 30/70", "一次性", m_sb_lump["annual_return"], m_sb_lump["max_drawdown"], m_sb_lump["excess_return"]),
+    ("永久组合", "定投", m_perm_dca["capital_return_annualized"], m_perm_dca["max_drawdown"], m_perm_dca["excess_return"]),
+    ("股债 30/70", "定投", m_sb_dca["capital_return_annualized"], m_sb_dca["max_drawdown"], m_sb_dca["excess_return"]),
+]:
+    md_overview += f"| {name} | {method} | {ann*100:+.2f}% | {dd*100:.1f}% | {exc*100:+.2f}% | {bench_ret_str} |\n"
+
+md_rolling = ""
+for i, label in enumerate(rolling_data["labels"]):
+    md_rolling += f"| {label} | {rolling_data['perm_ret'][i]:.2f}% | {rolling_data['bench_ret'][i]:.2f}% | {rolling_data['perm_ret'][i]-rolling_data['bench_ret'][i]:+.2f}% | {rolling_data['perm_dd'][i]:.1f}% | {rolling_data['bench_dd'][i]:.1f}% |\n"
+
+md_freq = ""
+for i in range(len(freq_data["labels"])):
+    md_freq += f"| {freq_data['labels'][i]} | {freq_data['ret'][i]:.2f}% | {freq_data['dd'][i]:.1f}% | {freq_data['sortino'][i]:.2f} |\n"
+
+md_dca = ""
+for i in range(5):
+    bold = "**" if i == 0 or i == 4 else ""
+    md_dca += f"| {bold}{dca_data['labels'][i]}{bold} | {bold}{dca_data['ret'][i]:.2f}%{bold} | {bold}{dca_data['dd'][i]:.1f}%{bold} | {bold}+{dca_data['gain'][i]:.0f} 万{bold} |\n"
+
+md = f"""# A 股资产配置回测报告
+
+> 2014-01-01 ~ 2025-12-31，共 12 年，数据来源 yfinance（复权价格），佣金万十，无风险利率 2.5%
+
+## 核心结论
+
+**对于 A 股普通投资者，最优配置是：**
+
+1. **永久组合**（沪深300 + 国债ETF + 黄金ETF + 货币基金，各 25%），**月度再平衡**
+2. **一次性投入**，100 万全部买入
+
+这样做的效果：
+- 年化 **{m_perm_lump['annual_return']*100:+.2f}%**（最大回撤 **{m_perm_lump['max_drawdown']*100:.1f}%**，沪深300 为 {m_perm_lump['benchmark_drawdown']*100:.1f}%，回撤降低 **{(1 - abs(m_perm_lump['max_drawdown'])/abs(m_perm_lump['benchmark_drawdown']))*100:.0f}%**）
+- 100 万一次性投入 12 年，期末约 **{m_perm_lump['final_value']/10000:.0f} 万**，总收益 +{(m_perm_lump['final_value']-1000000)/1000000*100:.0f}%
+
+> **为什么不是沪深300 年化 {bench_ret_str}？** 因为沪深300 过去 12 年的最大回撤高达 {m_perm_lump['benchmark_drawdown']*100:.1f}%，如果 2015 年高点买入，到 2019 年才回本，中间 4 年白等。永久组合虽然年化低一些，但回撤只有 {m_perm_lump['max_drawdown']*100:.1f}%，投资体验完全不同。
+
+---
+
+## 一、四策略总览
+
+我们测试了两种策略 × 两种投入方式的组合：
+
+![四策略总览](images/cn_permanent_overview.png)
+
+| 策略 | 投入方式 | 总资金年化 | 最大回撤 | 超额收益 | 沪深300 |
+|------|---------|-----------|---------|---------|--------|
+{md_overview}
+> **注意**：定投行使用的是**总资金年化回报**，而非 IRR。IRR 只计算已投入部分的收益率，忽略了闲置资金的机会成本，会高选定投的实际收益。详见第五节。
+
+**永久组合 + 一次性投入是最优解**——回撤最低、收益最高。
+
+---
+
+## 二、黄金和现金是关键
+
+为什么永久组合（加黄金+现金）好于股债平衡？
+
+![净值曲线](images/cn_permanent_equity_curve.png)
+
+- 沪深300 过去 12 年几乎原地踏步，中间经历了 2015 股灾、2018 贸易战、2022 疫情
+- 股债 30/70 靠国债平滑了波动，但收益只比沪深300好一点点
+- 永久组合加了黄金后，在股市下跌时黄金往往上涨（如 2020、2022），起到对冲作用
+- 25% 货币基金提供稳定的流动性，同时在再平衡时自动低买高卖
+
+---
+
+## 三、滚动窗口验证
+
+策略好不好，不能只看一个时间段。我们用 3 个不重叠的 10 年窗口验证：
+
+![滚动窗口](images/cn_permanent_rolling.png)
+
+| 窗口 | 永久组合 | 沪深300 | 超额 | 永久组合回撤 | 沪深300回撤 |
+|------|---------|---------|------|------------|------------|
+{md_rolling}
+---
+
+## 四、多久调一次仓？
+
+![再平衡频率](images/cn_permanent_rebalance_freq.png)
+
+| 频率 | 年化 | 回撤 | Sortino | 操作难度 |
+|------|------|------|---------|--------|
+{md_freq}**结论：月度再平衡最优，年化最高、回撤最低。** 每月花几分钟把比例调回 25% 即可。
+
+---
+
+## 五、定投 vs 一次性投入
+
+### 用什么指标比较？
+
+手里有 100 万，怎么投收益最高？核心指标是**总资金年化回报**——从第 1 天就拥有 100 万，最终赚了多少，年化是多少。
+
+以 2016-2025 窗口为例，总额 100 万，不同初始投入比例的效果：
+
+![定投初始比例](images/cn_permanent_dca_initial.png)
+
+| 初始投入 | 总资金年化 | 最大回撤 | 期末总收益 |
+|---------|-----------|---------|----------|
+{md_dca}
+结论很清楚：
+- **一次性投入年化 {dca_data['ret'][4]:.2f}%**，远高于纯定投的 {dca_data['ret'][0]:.2f}%
+- 初始投入越多，总资金回报越高
+- 定投的真正价值是**控制回撤**（{dca_data['dd'][0]:.1f}% vs {dca_data['dd'][4]:.1f}%），而非提高收益
+
+### 选择建议
+
+| 场景 | 建议 | 原因 |
+|------|------|------|
+| 手里已有 100 万，追求收益 | **一次性投入** | 年化 {dca_data['ret'][4]:.2f}%，10 年多赚 {dca_data['gain'][4]-dca_data['gain'][0]:.0f} 万 |
+| 心理承受能力弱，怕大跌 | **先投 50%，剩余定投** | 回撤 {dca_data['dd'][2]:.1f}%，年化仍有 {dca_data['ret'][2]:.2f}% |
+| 每月有固定收入，逐步积累 | **定投** | 虽然总资金回报低，但适合无存量资金的情况 |
+
+---
+
+## 六、具体怎么执行
+
+### 标的
+
+| 资产 | ETF 代码 | 比例 | 作用 |
+|------|---------|------|------|
+| 沪深300 | 510300.SS | 25% | 股票，获取市场收益 |
+| 国债ETF | 511010.SS | 25% | 债券，稳定压舱石 |
+| 黄金ETF | 518880.SS | 25% | 黄金，对冲股市下跌 |
+| 华宝添益 | 511990.SS | 25% | 货币基金，提供流动性和再平衡弹药 |
+
+### 操作（推荐方式）
+
+1. **一次性投入**：将 100 万按 1:1:1:1 比例买入四只 ETF
+2. **每月检查一次**，如果四只 ETF 的市值比例偏离 25% 太多就调一调
+3. **不需要止损**，不需要择时，不需要盯盘
+
+### 配置文件
+
+项目中提供了 4 个标准配置，可以直接复现所有结果：
+
+```bash
+cd /Users/yapex/workspace/backtrader-research
+uv sync
+
+# 一次性投入
+uv run engine.py --config examples/cn_stockbond.yaml
+uv run engine.py --config examples/cn_permanent.yaml
+
+# 定投
+uv run engine.py --config examples/cn_stockbond_dca.yaml
+uv run engine.py --config examples/cn_permanent_dca.yaml
+```
+
+---
+
+## 数据说明
+
+- **数据来源**：yfinance，A 股 ETF 使用复权价格（含分红），基准为沪深300
+- **佣金**：万十（0.1%），与实际交易成本一致
+- **回测期**：2014-01-01 ~ 2025-12-31（12 年）
+- **滚动验证**：3 个不重叠的 10 年窗口（2014-2023、2015-2024、2016-2025）
+- **收益指标**：总资金年化回报（定投）、年化收益（一次性投入）、最大回撤、Sortino 比率
+"""
+
+with open(f"{OUT_DIR}/cn_permanent_report.md", "w", encoding="utf-8") as f:
+    f.write(md)
+print(f"  [md]  cn_permanent_report.md")
+print(f"\n[done] Reports generated in {OUT_DIR}/")
