@@ -695,7 +695,6 @@ def print_results(m, effective, profile_name="", desc=""):
         print(f"  期末市值:         {m['final_value']:>11,.0f}")
         print(f"  总收益率:         {m['total_return']:>+11.2%}")
         print(f"  总资金年化:       {m['capital_return_annualized']:>+11.2%}")
-        print(f"  IRR (仅供参考):   {m['irr']:>+11.2%}")
         print(f"  定投期数:         {m['deposit_count']:>11d}")
 
     print("=" * 60)
