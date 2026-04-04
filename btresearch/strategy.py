@@ -1,21 +1,32 @@
 """Unified strategy: deposits + rebalance + stop-loss.
 
-Three independent actions per bar, no mode branching:
+Four independent actions per bar, no mode branching:
   1. Deposit day → inject cash, buy by target weights (new money only)
   2. Rebalance day → order_target_percent (sell + buy to restore targets)
-  3. Stop loss → clear all positions
+  3. Stop loss → clear all positions OR shift to crisis weights
+  4. Threshold rebalance → rebalance when any asset deviates beyond threshold
 
 Config via _config:
   _config["weights"]      target weights per asset
   _config["deposits"]     {total_capital, initial, amount, freq, day, day_mode}
-  _config["params"]       {rebalance_freq: "never"|"monthly"|"quarterly"|"yearly",
-                           stop_loss: null|float}
+  _config["params"]       {rebalance_freq, stop_loss, rebalance_threshold,
+                           stop_loss_mode, crisis_weights}
+
+YAML params (all optional, defaults in parentheses):
+  rebalance_freq:      "never" | "monthly" | "quarterly" | "yearly"  (never)
+  stop_loss:           null | float  (null)  — drawdown threshold to trigger action
+  stop_loss_mode:      "clear" | "crisis"  ("clear")  — clear all, or shift weights
+  crisis_weights:      {ticker: weight, ...}  (null)  — weights when crisis active
+  rebalance_threshold: null | float  (null)  — rebalance when any asset deviates
+                           beyond this fraction (e.g. 0.05 = 5%), checked daily
 
 Combinations (all from params, no code branching):
   - Pure buy-and-hold:    rebalance_freq=never, stop_loss=null, deposits.amount=0
   - Allocation:           rebalance_freq=monthly, stop_loss=0.15, deposits.amount=0
   - DCA:                  rebalance_freq=never, deposits.amount=auto
   - DCA + rebalance:      rebalance_freq=yearly, deposits.amount=auto
+  - Threshold rebalance:  rebalance_freq=never, rebalance_threshold=0.05
+  - Crisis mode:          stop_loss=0.15, stop_loss_mode=crisis, crisis_weights={...}
 """
 
 import backtrader as bt
@@ -25,6 +36,8 @@ class Strategy(bt.Strategy):
     params = (
         ("rebalance_freq", "never"),
         ("stop_loss", None),
+        ("stop_loss_mode", "clear"),
+        ("rebalance_threshold", None),
     )
 
     def __init__(self):
@@ -56,6 +69,18 @@ class Strategy(bt.Strategy):
         # Stop loss state
         self.peak_value = None
         self.stopped_out = False
+
+        # Crisis weights (for stop_loss_mode="crisis")
+        crisis_cfg = self._config.get("params", {}).get("crisis_weights")
+        self.crisis_weights = None
+        if crisis_cfg:
+            # crisis_weights in YAML: {"510300.SS": 0.10, "511010.SS": 0.60, ...}
+            # Build lookup by data object, same pattern as self.targets
+            self.crisis_weights = {}
+            for data in self.datas:
+                w = crisis_cfg.get(data._name, None)
+                if w is not None:
+                    self.crisis_weights[data] = w
 
         # Trade log
         self.trade_log: list[dict] = []
@@ -104,6 +129,20 @@ class Strategy(bt.Strategy):
         key = self._period_key(self.params.rebalance_freq)
         return self.last_rebalance_period is None or key != self.last_rebalance_period
 
+    def _is_threshold_rebalance(self):
+        """Check if any asset deviates beyond rebalance_threshold from target."""
+        threshold = self.params.rebalance_threshold
+        if threshold is None or threshold <= 0:
+            return False
+        total = self.broker.getvalue()
+        if total <= 0:
+            return False
+        for data, target_w in self.targets.items():
+            current_w = self.broker.getposition(data).size * data.close[0] / total
+            if abs(current_w - target_w) > threshold:
+                return True
+        return False
+
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
@@ -134,13 +173,22 @@ class Strategy(bt.Strategy):
         self.trade_log.append({"date": self.today, "type": "deposit", "amount": amount})
         return amount
 
-    def _do_rebalance(self):
-        for data, w in self.targets.items():
+    def _do_rebalance(self, weights=None):
+        if weights is None:
+            weights = self.targets
+        for data, w in weights.items():
             self.order_target_percent(data, w)
         self.last_rebalance_period = self._period_key(self.params.rebalance_freq)
         self.stopped_out = False
         if self.peak_value is None:
             self.peak_value = self.broker.getvalue()
+
+    def _do_crisis_rebalance(self):
+        """Shift to crisis weights (more conservative allocation)."""
+        if not self.crisis_weights:
+            return
+        self._do_rebalance(weights=self.crisis_weights)
+        self.stopped_out = True
 
     def _check_stop_loss(self):
         if self.params.stop_loss is None:
@@ -150,9 +198,12 @@ class Strategy(bt.Strategy):
             self.peak_value = total
         self.peak_value = max(self.peak_value, total)
         if (total - self.peak_value) / self.peak_value < -self.params.stop_loss:
-            for data in self.targets:
-                self.order_target_percent(data, 0.0)
-            self.stopped_out = True
+            if self.params.stop_loss_mode == "crisis" and self.crisis_weights:
+                self._do_crisis_rebalance()
+            else:
+                for data in self.targets:
+                    self.order_target_percent(data, 0.0)
+                self.stopped_out = True
 
     # ------------------------------------------------------------------
     # Main loop
@@ -181,8 +232,12 @@ class Strategy(bt.Strategy):
                     self.broker.add_cash(deposited)
                     self._buy_by_weight(deposited)
 
-        # 2. Rebalance
+        # 2. Rebalance (scheduled)
         if not self.stopped_out and self._is_rebalance_day():
+            self._do_rebalance()
+
+        # 2b. Rebalance (threshold-based)
+        if not self.stopped_out and not self._is_rebalance_day() and self._is_threshold_rebalance():
             self._do_rebalance()
 
         # 3. Stop loss

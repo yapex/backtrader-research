@@ -11,6 +11,9 @@ Usage (unchanged):
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 # ======================================================================
 # Public API re-exports
 # ======================================================================
@@ -247,25 +250,159 @@ def _print_table(
 
 
 # ======================================================================
+# Machine-readable output (--json mode)
+# ======================================================================
+
+# Metrics to output in --json mode (ordered for readability)
+_JSON_METRIC_KEYS = [
+    ("sortino", "sortino"),
+    ("sharpe", "sharpe"),
+    ("calmar", "calmar"),
+    ("annual_return", "annual_return"),
+    ("max_drawdown", "max_drawdown"),
+    ("irr", "irr"),
+    ("total_return", "total_return"),
+    ("capital_return_annualized", "capital_return_annualized"),
+    ("final_value", "final_value"),
+    ("total_deposited", "total_deposited"),
+    ("deposit_count", "deposit_count"),
+    ("beat_benchmark", "beat_benchmark"),
+    ("excess_return", "excess_return"),
+    ("benchmark_return", "benchmark_return"),
+    ("benchmark_drawdown", "benchmark_drawdown"),
+]
+
+
+def _print_json_metrics(m: dict) -> None:
+    """Print metrics as 'key: value' lines. Designed for grep/sed parsing."""
+    for key, _ in _JSON_METRIC_KEYS:
+        v = m.get(key)
+        if v is None:
+            continue
+        if isinstance(v, bool):
+            print(f"{key}: {int(v)}")
+        elif isinstance(v, float):
+            print(f"{key}: {v:.6f}")
+        else:
+            print(f"{key}: {v}")
+
+
+def _print_json_crash(error_msg: str) -> None:
+    """Print zero-metrics on crash. LLM sees these and logs 'crash'."""
+    for key, _ in _JSON_METRIC_KEYS:
+        if key in ("beat_benchmark", "deposit_count"):
+            print(f"{key}: 0")
+        else:
+            print(f"{key}: 0.000000")
+    print(f"crash: 1")
+    print(f"crash_reason: {error_msg}", file=sys.stderr)
+
+
+def _batch_run(yaml_files: list[str], json_mode: bool = False) -> None:
+    """Run multiple YAML configs, output TSV summary.
+
+    Each config is run independently. Crashes are recorded as zero-metrics.
+    Output is a TSV to stdout (one line per config).
+    """
+    _orig_stdout = sys.stdout
+    if not json_mode:
+        sys.stdout = sys.stderr
+
+    cols = ["config", "sortino", "strategy_return", "max_drawdown", "calmar",
+            "sharpe", "deposit_count", "beat_benchmark", "excess_return", "final_value", "crash"]
+    rows = []
+
+    for i, fpath in enumerate(yaml_files, 1):
+        label = Path(fpath).stem
+        print(f"\r[{i}/{len(yaml_files)}] {label:<30s}", end="", flush=True, file=sys.stderr)
+        try:
+            config = load_config(fpath)
+            m = _run_single_config(config)
+            # Use capital_return_annualized for DCA, annual_return for lump sum
+            is_dca = m.get("deposit_count", 0) > 0
+            strat_ret = m["capital_return_annualized"] if is_dca else m["annual_return"]
+            rows.append({
+                "config": label,
+                "sortino": f"{m['sortino']:.6f}",
+                "strategy_return": f"{strat_ret:.6f}",
+                "max_drawdown": f"{m['max_drawdown']:.6f}",
+                "calmar": f"{m['calmar']:.6f}",
+                "sharpe": f"{m['sharpe']:.6f}",
+                "deposit_count": m.get("deposit_count", 0),
+                "beat_benchmark": int(m.get("beat_benchmark", 0)),
+                "excess_return": f"{m.get('excess_return', 0):.6f}",
+                "final_value": f"{m['final_value']:.0f}",
+                "crash": 0,
+            })
+        except Exception as e:
+            rows.append({
+                "config": label,
+                "sortino": "0.000000", "strategy_return": "0.000000",
+                "max_drawdown": "0.000000", "calmar": "0.000000",
+                "sharpe": "0.000000", "deposit_count": 0,
+                "beat_benchmark": 0,
+                "excess_return": "0.000000", "final_value": "0",
+                "crash": 1,
+            })
+            print(f"\n  [CRASH] {label}: {e}", file=sys.stderr)
+
+    # Output TSV to stdout
+    sys.stdout = _orig_stdout
+    print("\t".join(cols))
+    for r in rows:
+        print("\t".join(str(r[c]) for c in cols))
+
+
+# ======================================================================
 # CLI entry point
 # ======================================================================
+
+def _run_single_config(config: dict, profile: dict | None = None) -> dict:
+    """Run a single config and return metrics dict. Raises on failure."""
+    return run_backtest(config, profile)
+
 
 def main():
     """CLI entry point.
 
     Modes:
       --config FILE [--profile NAME]   YAML config mode (original)
+      --batch FILE [FILE ...]          Batch mode: run multiple YAMLs, output TSV
       --buy TICKER                      Single fund buy-and-hold
       --compare T1 T2 ...               Multi-fund buy-and-hold
       --stock-bond T1 T2 ...            Stock-bond 30/70 (swap stock slot)
       --permanent T1 T2 ...             Permanent portfolio (swap stock slot)
 
-    Global flags: --period  --benchmark  --cash  --currency  --dca
+    Global flags: --json  --period  --benchmark  --cash  --currency  --dca
+
+    --json: Output metrics as key: value lines (machine-readable). Log noise goes to stderr.
+           Example: sortino: 0.723660\nannual_return: 0.0612\nmax_drawdown: -0.1246
+    --batch: Run N YAML configs, output TSV with all results. Crash rows show 0s.
     """
     import sys
+    import json as _json
 
     try:
         args = sys.argv[1:]
+
+        # Global flags
+        json_mode = "--json" in args
+        batch_mode = "--batch" in args
+        args = [a for a in args if a != "--json" and a != "--batch"]
+
+        # ---- Batch mode: --batch c1.yaml c2.yaml ... ----
+        if batch_mode:
+            yaml_files = [a for a in args if not a.startswith("-")]
+            if not yaml_files:
+                print("[ERROR] --batch requires at least one YAML file", file=sys.stderr)
+                sys.exit(1)
+            _batch_run(yaml_files, json_mode)
+            return
+
+        # Redirect log noise to stderr in --json mode
+        if json_mode:
+            _orig_stdout = sys.stdout
+            sys.stdout = sys.stderr
 
         # Detect mode
         mode = "config"  # default
@@ -364,12 +501,23 @@ def main():
         print()
 
         metrics = run_backtest(config, profile)
-        print_results(metrics, effective, profile_name, desc)
+
+        # ---- Output ----
+        if json_mode:
+            sys.stdout = _orig_stdout
+            _print_json_metrics(metrics)
+        else:
+            print_results(metrics, effective, profile_name, desc)
 
     except Exception as e:
-        print(f"\n[CRASH] {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
+        if json_mode:
+            # Restore and print crash metrics
+            sys.stdout = _orig_stdout
+            _print_json_crash(str(e))
+        else:
+            print(f"\n[CRASH] {type(e).__name__}: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
         sys.exit(1)
 
 
