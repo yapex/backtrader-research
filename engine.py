@@ -448,12 +448,23 @@ def evaluate(portfolio: pd.Series, benchmark: pd.Series | None,
     irr = _compute_irr(portfolio, deposit_dates, deposit_amounts)
     total_return = (final_value - total_deposited) / total_deposited if total_deposited > 0 else 0.0
 
+    # Total return on capital (annualized over FULL period)
+    # This is the correct metric for "I have X capital from day 1, how to invest?"
+    # Unlike IRR, it accounts for idle cash sitting on the sidelines.
+    if total_deposited > 0:
+        full_years = len(portfolio) / TRADING_DAYS_PER_YEAR
+        capital_return_annualized = float(
+            (1 + total_return) ** (1 / full_years) - 1
+        ) if full_years > 0 else 0.0
+    else:
+        capital_return_annualized = ann_ret
+
     # Benchmark (always buy-and-hold)
     bench_ret = _annual_return(benchmark) if benchmark is not None else None
     bench_dd = _max_drawdown(benchmark) if benchmark is not None else None
 
-    # Use IRR for DCA comparison, ann_ret for allocation
-    strategy_return = irr if deposit_count > 0 else ann_ret
+    # Use total return on capital for DCA, ann_ret for allocation
+    strategy_return = capital_return_annualized if deposit_count > 0 else ann_ret
     beat = strategy_return > bench_ret if bench_ret is not None else None
     excess = strategy_return - bench_ret if bench_ret is not None else None
     passed = beat if beat is not None else False
@@ -465,6 +476,7 @@ def evaluate(portfolio: pd.Series, benchmark: pd.Series | None,
         "annual_return": ann_ret,
         "irr": irr,
         "total_return": total_return,
+        "capital_return_annualized": capital_return_annualized,
         "max_drawdown": max_dd,
         "passed": passed,
         "total_deposited": total_deposited,
@@ -659,8 +671,8 @@ def print_results(m, effective, profile_name="", desc=""):
         print(f"  {desc}")
     print(f"  sortino:           {m['sortino']:>12.6f}  {passed}")
 
-    ret_label = "IRR" if is_dca else "年化收益"
-    ret_value = m["irr"] if is_dca else m["annual_return"]
+    ret_label = "总资金年化" if is_dca else "年化收益"
+    ret_value = m["capital_return_annualized"] if is_dca else m["annual_return"]
     print(f"  {ret_label}:       {ret_value:>+11.2%}")
     print(f"  最大回撤:         {m['max_drawdown']:>11.2%}")
 
@@ -682,6 +694,8 @@ def print_results(m, effective, profile_name="", desc=""):
         print(f"  累计投入:         {m['total_deposited']:>11,.0f}")
         print(f"  期末市值:         {m['final_value']:>11,.0f}")
         print(f"  总收益率:         {m['total_return']:>+11.2%}")
+        print(f"  总资金年化:       {m['capital_return_annualized']:>+11.2%}")
+        print(f"  IRR (仅供参考):   {m['irr']:>+11.2%}")
         print(f"  定投期数:         {m['deposit_count']:>11d}")
 
     print("=" * 60)
