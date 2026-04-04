@@ -193,6 +193,16 @@ max_dds = [
 ]
 bar_colors = [COLORS["stockbond"], COLORS["permanent"], COLORS["stockbond"], COLORS["permanent"]]
 
+# Excess return vs benchmark
+bench_ret = m_perm_lump["benchmark_return"] * 100
+excess_rets = [
+    m_sb_lump["excess_return"] * 100,
+    m_perm_lump["excess_return"] * 100,
+    m_sb_dca["excess_return"] * 100,
+    m_perm_dca["excess_return"] * 100,
+]
+excess_colors = ["#27AE60" if v >= 0 else "#E74C3C" for v in excess_rets]
+
 fig2 = go.Figure()
 fig2.add_trace(go.Bar(x=strategies, y=ann_rets, name="年化收益", marker_color=bar_colors,
                        text=[f"{v:.2f}%" for v in ann_rets], textposition="outside",
@@ -201,8 +211,11 @@ fig2.add_trace(go.Bar(x=strategies, y=max_dds, name="最大回撤", marker_color
                        opacity=0.4, marker_line_color=bar_colors, marker_line_width=2,
                        text=[f"{v:.1f}%" for v in max_dds], textposition="outside",
                        textfont=dict(size=13, color="#666")))
+fig2.add_trace(go.Bar(x=strategies, y=excess_rets, name="超额收益（vs 沪深300）", marker_color=excess_colors,
+                       text=[f"{v:+.2f}%" for v in excess_rets], textposition="outside",
+                       textfont=dict(size=13)))
 fig2.update_layout(
-    title="四策略总览：年化收益 vs 最大回撤",
+    title=f"四策略总览（沪深300基准：年化 {bench_ret:.2f}%）",
     barmode="group",
     hovermode="x unified",
     height=450,
@@ -317,18 +330,20 @@ for fig, section_id, title in [
 
 # Summary table
 summary_rows = ""
-for name, ann, dd, beat in [
-    ("永久组合 一次性", m_perm_lump["annual_return"], m_perm_lump["max_drawdown"], m_perm_lump["beat_benchmark"]),
-    ("股债 30/70 一次性", m_sb_lump["annual_return"], m_sb_lump["max_drawdown"], m_sb_lump["beat_benchmark"]),
-    ("永久组合 定投", m_perm_dca["capital_return_annualized"], m_perm_dca["max_drawdown"], m_perm_dca["beat_benchmark"]),
-    ("股债 30/70 定投", m_sb_dca["capital_return_annualized"], m_sb_dca["max_drawdown"], m_sb_dca["beat_benchmark"]),
+for name, ann, dd, excess, beat in [
+    ("永久组合 一次性", m_perm_lump["annual_return"], m_perm_lump["max_drawdown"], m_perm_lump["excess_return"], m_perm_lump["beat_benchmark"]),
+    ("股债 30/70 一次性", m_sb_lump["annual_return"], m_sb_lump["max_drawdown"], m_sb_lump["excess_return"], m_sb_lump["beat_benchmark"]),
+    ("永久组合 定投", m_perm_dca["capital_return_annualized"], m_perm_dca["max_drawdown"], m_perm_dca["excess_return"], m_perm_dca["beat_benchmark"]),
+    ("股债 30/70 定投", m_sb_dca["capital_return_annualized"], m_sb_dca["max_drawdown"], m_sb_dca["excess_return"], m_sb_dca["beat_benchmark"]),
 ]:
     beat_str = '<span class="pass">✅</span>' if beat else '<span class="fail">❌</span>'
+    excess_color = "color:#27AE60" if excess >= 0 else "color:#E74C3C"
     summary_rows += f"""
     <tr>
       <td>{name}</td>
       <td>{ann*100:+.2f}%</td>
       <td>{dd*100:.1f}%</td>
+      <td style="{excess_color}">{excess*100:+.2f}%</td>
       <td>{beat_str}</td>
     </tr>"""
 
@@ -427,29 +442,33 @@ html = f"""<!DOCTYPE html>
   <div class="card">
     <h2>四策略总览</h2>
     <table>
-      <tr><th>策略</th><th>投入方式</th><th>总资金年化</th><th>最大回撤</th><th>跑赢沪深300</th></tr>
+      <tr><th>策略</th><th>投入方式</th><th>总资金年化</th><th>最大回撤</th><th>超额收益</th><th>跑赢基准</th></tr>
       <tr class="highlight">
         <td><strong>永久组合</strong></td><td>一次性</td>
         <td><strong>{m_perm_lump["annual_return"]*100:+.2f}%</strong></td>
         <td>{m_perm_lump["max_drawdown"]*100:.1f}%</td>
+        <td style="color:{'#27AE60' if m_perm_lump['excess_return']>=0 else '#E74C3C'}">{m_perm_lump["excess_return"]*100:+.2f}%</td>
         <td>{'<span class="pass">✅</span>' if m_perm_lump["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
       </tr>
       <tr>
         <td>股债 30/70</td><td>一次性</td>
         <td>{m_sb_lump["annual_return"]*100:+.2f}%</td>
         <td>{m_sb_lump["max_drawdown"]*100:.1f}%</td>
+        <td style="color:{'#27AE60' if m_sb_lump['excess_return']>=0 else '#E74C3C'}">{m_sb_lump["excess_return"]*100:+.2f}%</td>
         <td>{'<span class="pass">✅</span>' if m_sb_lump["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
       </tr>
       <tr>
         <td>永久组合</td><td>定投</td>
         <td>{m_perm_dca["capital_return_annualized"]*100:+.2f}%</td>
         <td>{m_perm_dca["max_drawdown"]*100:.1f}%</td>
+        <td style="color:{'#27AE60' if m_perm_dca['excess_return']>=0 else '#E74C3C'}">{m_perm_dca["excess_return"]*100:+.2f}%</td>
         <td>{'<span class="pass">✅</span>' if m_perm_dca["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
       </tr>
       <tr>
         <td>股债 30/70</td><td>定投</td>
         <td>{m_sb_dca["capital_return_annualized"]*100:+.2f}%</td>
         <td>{m_sb_dca["max_drawdown"]*100:.1f}%</td>
+        <td style="color:{'#27AE60' if m_sb_dca['excess_return']>=0 else '#E74C3C'}">{m_sb_dca["excess_return"]*100:+.2f}%</td>
         <td>{'<span class="pass">✅</span>' if m_sb_dca["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
       </tr>
     </table>
