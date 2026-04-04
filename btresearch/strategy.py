@@ -1,5 +1,4 @@
-"""
-Unified strategy: deposits + rebalance + stop-loss.
+"""Unified strategy: deposits + rebalance + stop-loss.
 
 Three independent actions per bar, no mode branching:
   1. Deposit day → inject cash, buy by target weights (new money only)
@@ -114,9 +113,15 @@ class Strategy(bt.Strategy):
         if cash_amount <= 0:
             return
         for data, w in self.targets.items():
-            amount = cash_amount * w
-            if amount > 0 and data.close[0] > 0:
-                self.buy(data=data, size=amount / data.close[0])
+            if w > 0 and data.close[0] > 0:
+                total = self.broker.getvalue()
+                if total <= 0:
+                    continue
+                target_pct = w * cash_amount / total
+                # Cap at 0.98 to leave room for commission costs
+                target_pct = min(target_pct, 0.98)
+                if target_pct > 0:
+                    self.order_target_percent(data, target_pct)
 
     def _do_deposit(self) -> float:
         amount = min(self.dep_amount, self.dep_remaining)

@@ -7,10 +7,10 @@ Outputs a single self-contained HTML file with:
   - Responsive layout
 """
 import sys, copy, json
-sys.path.insert(0, "/Users/yapex/workspace/backtrader-research")
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
 from engine import (
-    run_backtest, _get_benchmark, _get_strategy_result,
-    _deep_merge, get_commission, _annual_return, _max_drawdown,
+    run_backtest, get_benchmark, get_strategy_result,
+    deep_merge, get_commission, annual_return, max_drawdown,
 )
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -42,8 +42,8 @@ COLORS = {"permanent": "#E67E22", "stockbond": "#3498DB", "benchmark": "#95A5A6"
 
 
 def get_portfolio(config, profile=None):
-    effective = _deep_merge(config, profile) if profile else config
-    result = _get_strategy_result(effective)
+    effective = deep_merge(config, profile) if profile else config
+    result = get_strategy_result(effective)
     return result["portfolio"]
 
 
@@ -91,7 +91,7 @@ m_sb_lump = run_backtest(sb_lump, sb_lump)
 m_perm_dca = run_backtest(perm_dca, perm_dca)
 m_sb_dca = run_backtest(sb_dca, sb_dca)
 
-bench_full = _get_benchmark("510300.SS", period_full, 100000, COMMISSION)
+bench_full = get_benchmark("510300.SS", period_full, 100000, COMMISSION)
 
 p_perm = normalize(get_portfolio(perm_lump, perm_lump))
 p_sb = normalize(get_portfolio(sb_lump, sb_lump))
@@ -127,15 +127,15 @@ for label, s, e in windows:
     cfg_s["deposits"] = {"total_capital": 0}
     ms = run_backtest(cfg_s, cfg_s)
 
-    b = _get_benchmark("510300.SS", {"start": s, "end": e}, 100000, COMMISSION)
+    b = get_benchmark("510300.SS", {"start": s, "end": e}, 100000, COMMISSION)
 
     rolling_data["labels"].append(label)
     rolling_data["perm_ret"].append(mp["annual_return"] * 100)
     rolling_data["sb_ret"].append(ms["annual_return"] * 100)
-    rolling_data["bench_ret"].append(_annual_return(b) * 100)
+    rolling_data["bench_ret"].append(annual_return(b) * 100)
     rolling_data["perm_dd"].append(mp["max_drawdown"] * 100)
     rolling_data["sb_dd"].append(ms["max_drawdown"] * 100)
-    rolling_data["bench_dd"].append(_max_drawdown(b) * 100)
+    rolling_data["bench_dd"].append(max_drawdown(b) * 100)
 
 # ======================================================================
 # Rebalance freq — BOTH strategies

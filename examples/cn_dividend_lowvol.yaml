@@ -1,0 +1,34 @@
+# 三只红利相关ETF vs 沪深300 — 买入持有（2019起，公平对比）
+benchmark: 510300.SS
+currency: CNY
+cash: 1000000
+
+period:
+  start: "2019-01-01"
+  end: "2025-12-31"
+
+params:
+  rebalance_freq: never
+  stop_loss: null
+
+profiles:
+  红利低波:
+    description: "中证红利低波ETF 512890"
+    assets:
+      - ticker: 512890.SS
+        role: equity
+        weight: 1.0
+
+  红利:
+    description: "中证红利ETF 159905"
+    assets:
+      - ticker: 159905.SZ
+        role: equity
+        weight: 1.0
+
+  上证红利:
+    description: "上证红利ETF 510880"
+    assets:
+      - ticker: 510880.SS
+        role: equity
+        weight: 1.0
