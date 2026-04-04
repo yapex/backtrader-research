@@ -126,7 +126,7 @@ bash sweep.sh --clear
 | `_sweep.py` | 参数穷举驱动 |
 | `sweep.sh` | 批量穷举入口 |
 | `program.md` | 研究指引（评分规则、搜索空间） |
-| `cn_permanent_report.md` | A 股永久组合回测报告 |
+| `reports/cn_permanent_report.md` | A 股永久组合回测报告 |
 | `examples/` | 各市场示例配置 |
 | `results/` | 实验结果数据（TSV + 图表） |
 
