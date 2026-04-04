@@ -1,63 +1,80 @@
 """
-Trading strategy — Agent modifies this file.
+Unified strategy: deposits + rebalance + stop-loss.
 
-面向普通用户，策略简单到可以手动执行。
-所有行为由 research.yaml 的 params 控制。
+Three independent actions per bar, no mode branching:
+  1. Deposit day → inject cash, buy by target weights (new money only)
+  2. Rebalance day → order_target_percent (sell + buy to restore targets)
+  3. Stop loss → clear all positions
 
-engine.py injects research.yaml config into Strategy._config:
-  - _config["tickers"]  e.g. ["SPY", "TLT", "GLD"]
-  - _config["weights"]  e.g. {"SPY": 0.25, "TLT": 0.25, "GLD": 0.25}
-  - _config["roles"]    e.g. {"SPY": "equity", "TLT": "bond", "GLD": "gold"}
-  - _config["params"]   e.g. {"rebalance_freq": "yearly", "stop_loss": null}
+Config via _config:
+  _config["weights"]      target weights per asset
+  _config["deposits"]     {total_capital, initial, amount, freq, day, day_mode}
+  _config["params"]       {rebalance_freq: "never"|"monthly"|"quarterly"|"yearly",
+                           stop_loss: null|float}
 
-权重之和 <= 1.0，剩余部分自动留为现金。
-例如 25/25/25 = 75%，剩余 25% 现金。
-
-Only requirement: define a class called Strategy that inherits bt.Strategy.
+Combinations (all from params, no code branching):
+  - Pure buy-and-hold:    rebalance_freq=never, stop_loss=null, deposits.amount=0
+  - Allocation:           rebalance_freq=monthly, stop_loss=0.15, deposits.amount=0
+  - DCA:                  rebalance_freq=never, deposits.amount=auto
+  - DCA + rebalance:      rebalance_freq=yearly, deposits.amount=auto
 """
 
 import backtrader as bt
 
 
 class Strategy(bt.Strategy):
-    """配置驱动的定期再平衡策略，可选止损。
-
-    行为由 research.yaml → params 控制：
-
-      rebalance_freq: "monthly" | "quarterly" | "yearly"
-      stop_loss: null | 0.15             — 组合从高点回撤超过此值，全部清仓留现金
-    """
-
     params = (
-        ("rebalance_freq", "quarterly"),
+        ("rebalance_freq", "never"),
         ("stop_loss", None),
     )
 
     def __init__(self):
-        yaml_params = self._config.get("params", {})
-        for key, val in yaml_params.items():
+        # Parse YAML params
+        for key, val in self._config.get("params", {}).items():
             if key in self.params._getpairs():
                 setattr(self.params, key, val)
 
-        # 通用：支持 N 个资产，每个带权重
-        self.targets = {}  # data → target_weight
+        # Target weights
+        self.targets = {}
         for data in self.datas:
-            name = data._name
-            w = self._config["weights"].get(name, 0.0)
-            self.targets[data] = w
+            self.targets[data] = self._config["weights"].get(data._name, 0.0)
 
-        self.last_period = None
+        # Deposit state
+        dep = self._config.get("deposits", {})
+        self.dep_remaining = dep.get("total_capital", 0) - dep.get("initial", 0)
+        self.dep_initial = dep.get("initial", 0)
+        self.dep_amount = dep.get("amount", 0)
+        self.dep_freq = dep.get("freq", "monthly")
+        self.dep_day = dep.get("day", 1)
+        self.dep_day_mode = dep.get("day_mode", "exact")
+        self.deposits_active = dep.get("total_capital", 0) > 0
+        self.total_deposited = 0.0
+        self.last_dep_period = None
+
+        # Rebalance state
+        self.last_rebalance_period = None
+
+        # Stop loss state
         self.peak_value = None
         self.stopped_out = False
+
+        # Trade log
+        self.trade_log: list[dict] = []
+        self.initial_done = False
 
     @property
     def today(self):
         return self.datas[0].datetime.date(0)
 
-    def _period_key(self):
+    # ------------------------------------------------------------------
+    # Period helpers
+    # ------------------------------------------------------------------
+
+    def _period_key(self, freq):
         d = self.today
-        freq = self.params.rebalance_freq
-        if freq == "monthly":
+        if freq == "weekly":
+            return (d.year, d.isocalendar()[1])
+        elif freq == "monthly":
             return (d.year, d.month)
         elif freq == "quarterly":
             return (d.year, (d.month - 1) // 3)
@@ -65,37 +82,103 @@ class Strategy(bt.Strategy):
             return (d.year,)
         return (d.year, d.month)
 
+    def _is_deposit_day(self):
+        if not self.deposits_active or self.dep_remaining <= 0:
+            return False
+        today = self.today
+        if self.dep_freq == "weekly":
+            return today.weekday() == self.dep_day
+        mode = self.dep_day_mode
+        if mode == "exact":
+            return today.day == self.dep_day
+        elif mode == "first":
+            return today.month != getattr(self, "_last_deposit_month", None)
+        elif mode == "last":
+            nxt = today.replace(day=min(today.day + 1, 28))
+            if nxt.month != today.month:
+                return today.month != getattr(self, "_last_deposit_month", None)
+        return False
+
+    def _is_rebalance_day(self):
+        if self.params.rebalance_freq == "never":
+            return False
+        key = self._period_key(self.params.rebalance_freq)
+        return self.last_rebalance_period is None or key != self.last_rebalance_period
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
+
+    def _buy_by_weight(self, cash_amount):
+        """Split new cash by target weights. Does NOT touch existing positions."""
+        if cash_amount <= 0:
+            return
+        for data, w in self.targets.items():
+            amount = cash_amount * w
+            if amount > 0 and data.close[0] > 0:
+                self.buy(data=data, size=amount / data.close[0])
+
+    def _do_deposit(self) -> float:
+        amount = min(self.dep_amount, self.dep_remaining)
+        if amount <= 0:
+            return 0.0
+        self.dep_remaining -= amount
+        self.total_deposited += amount
+        self.last_dep_period = self._period_key(self.dep_freq)
+        self._last_deposit_month = self.today.month
+        self.trade_log.append({"date": self.today, "type": "deposit", "amount": amount})
+        return amount
+
     def _do_rebalance(self):
-        for data, weight in self.targets.items():
-            self.order_target_percent(data, weight)
-        self.last_period = self._period_key()
+        for data, w in self.targets.items():
+            self.order_target_percent(data, w)
+        self.last_rebalance_period = self._period_key(self.params.rebalance_freq)
         self.stopped_out = False
         if self.peak_value is None:
             self.peak_value = self.broker.getvalue()
 
-    def _check_stop(self):
+    def _check_stop_loss(self):
         if self.params.stop_loss is None:
             return
         total = self.broker.getvalue()
         if self.peak_value is None:
             self.peak_value = total
         self.peak_value = max(self.peak_value, total)
-        dd = (total - self.peak_value) / self.peak_value
-        if dd < -self.params.stop_loss:
-            # 全部清仓，留现金
+        if (total - self.peak_value) / self.peak_value < -self.params.stop_loss:
             for data in self.targets:
                 self.order_target_percent(data, 0.0)
             self.stopped_out = True
 
+    # ------------------------------------------------------------------
+    # Main loop
+    # ------------------------------------------------------------------
+
     def next(self):
-        # 首次建仓
-        has_position = any(self.getposition(d).size > 0 for d in self.targets)
-        if not has_position:
-            self._do_rebalance()
+        # Day 1
+        if not self.initial_done:
+            if self.dep_initial > 0:
+                self.broker.set_cash(self.dep_initial)
+                self.trade_log.append({"date": self.today, "type": "deposit",
+                                       "amount": self.dep_initial})
+                self.total_deposited += self.dep_initial
+                self._buy_by_weight(self.dep_initial)
+            elif not self.deposits_active:
+                self._buy_by_weight(self.broker.getcash())
+            self.initial_done = True
             return
 
-        self._check_stop()
+        # 1. Deposit
+        if self.deposits_active and self.dep_remaining > 0 and self._is_deposit_day():
+            cur = self._period_key(self.dep_freq)
+            if cur != self.last_dep_period:
+                deposited = self._do_deposit()
+                if deposited > 0:
+                    self.broker.add_cash(deposited)
+                    self._buy_by_weight(deposited)
 
-        key = self._period_key()
-        if key != self.last_period and not self.stopped_out:
+        # 2. Rebalance
+        if not self.stopped_out and self._is_rebalance_day():
             self._do_rebalance()
+
+        # 3. Stop loss
+        self._check_stop_loss()

@@ -1,5 +1,4 @@
 # A股 · 红利ETF + 国债
-# 数据源: akshare (新浪)
 
 assets:
   - ticker: 159905.SZ

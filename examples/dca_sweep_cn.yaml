@@ -1,0 +1,313 @@
+name: dca-sweep-cn
+description: 'A股股债定投: 5比例 × 5初始 = 25'
+benchmark: 510300.SS
+currency: CNY
+period:
+  start: '2016-01-01'
+  end: '2025-12-31'
+deposits:
+  total_capital: 1000000
+  freq: monthly
+  day: 1
+  day_mode: first
+profiles:
+  7030_I0:
+    description: 70/30 初始0%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.7
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.3
+    deposits:
+      total_capital: 1000000
+      initial: 0
+  7030_I25:
+    description: 70/30 初始25%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.7
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.3
+    deposits:
+      total_capital: 1000000
+      initial: 250000
+  7030_I50:
+    description: 70/30 初始50%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.7
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.3
+    deposits:
+      total_capital: 1000000
+      initial: 500000
+  7030_I75:
+    description: 70/30 初始75%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.7
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.3
+    deposits:
+      total_capital: 1000000
+      initial: 750000
+  7030_I100:
+    description: 70/30 初始100%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.7
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.3
+    deposits:
+      total_capital: 1000000
+      initial: 1000000
+  6040_I0:
+    description: 60/40 初始0%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.6
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.4
+    deposits:
+      total_capital: 1000000
+      initial: 0
+  6040_I25:
+    description: 60/40 初始25%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.6
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.4
+    deposits:
+      total_capital: 1000000
+      initial: 250000
+  6040_I50:
+    description: 60/40 初始50%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.6
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.4
+    deposits:
+      total_capital: 1000000
+      initial: 500000
+  6040_I75:
+    description: 60/40 初始75%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.6
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.4
+    deposits:
+      total_capital: 1000000
+      initial: 750000
+  6040_I100:
+    description: 60/40 初始100%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.6
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.4
+    deposits:
+      total_capital: 1000000
+      initial: 1000000
+  5050_I0:
+    description: 50/50 初始0%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.5
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.5
+    deposits:
+      total_capital: 1000000
+      initial: 0
+  5050_I25:
+    description: 50/50 初始25%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.5
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.5
+    deposits:
+      total_capital: 1000000
+      initial: 250000
+  5050_I50:
+    description: 50/50 初始50%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.5
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.5
+    deposits:
+      total_capital: 1000000
+      initial: 500000
+  5050_I75:
+    description: 50/50 初始75%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.5
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.5
+    deposits:
+      total_capital: 1000000
+      initial: 750000
+  5050_I100:
+    description: 50/50 初始100%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.5
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.5
+    deposits:
+      total_capital: 1000000
+      initial: 1000000
+  4060_I0:
+    description: 40/60 初始0%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.4
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.6
+    deposits:
+      total_capital: 1000000
+      initial: 0
+  4060_I25:
+    description: 40/60 初始25%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.4
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.6
+    deposits:
+      total_capital: 1000000
+      initial: 250000
+  4060_I50:
+    description: 40/60 初始50%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.4
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.6
+    deposits:
+      total_capital: 1000000
+      initial: 500000
+  4060_I75:
+    description: 40/60 初始75%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.4
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.6
+    deposits:
+      total_capital: 1000000
+      initial: 750000
+  4060_I100:
+    description: 40/60 初始100%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.4
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.6
+    deposits:
+      total_capital: 1000000
+      initial: 1000000
+  3070_I0:
+    description: 30/70 初始0%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.3
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.7
+    deposits:
+      total_capital: 1000000
+      initial: 0
+  3070_I25:
+    description: 30/70 初始25%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.3
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.7
+    deposits:
+      total_capital: 1000000
+      initial: 250000
+  3070_I50:
+    description: 30/70 初始50%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.3
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.7
+    deposits:
+      total_capital: 1000000
+      initial: 500000
+  3070_I75:
+    description: 30/70 初始75%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.3
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.7
+    deposits:
+      total_capital: 1000000
+      initial: 750000
+  3070_I100:
+    description: 30/70 初始100%
+    assets:
+    - ticker: 510300.SS
+      role: equity
+      weight: 0.3
+    - ticker: 511010.SS
+      role: bond
+      weight: 0.7
+    deposits:
+      total_capital: 1000000
+      initial: 1000000
