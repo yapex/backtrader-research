@@ -20,7 +20,7 @@
 
 我们测试了两种策略 × 两种投入方式的组合：
 
-![四策略总览](results/images/cn_permanent_overview.png)
+![四策略总览](images/cn_permanent_overview.png)
 
 | 策略 | 投入方式 | 年化收益 | 最大回撤 | 收益回撤比 | 跑赢沪深300 |
 |------|---------|---------|---------|-----------|------------|
@@ -37,7 +37,7 @@
 
 为什么永久组合（加黄金）远好于股债平衡？
 
-![净值曲线](results/images/cn_permanent_equity_curve.png)
+![净值曲线](images/cn_permanent_equity_curve.png)
 
 - 沪深300 过去 12 年几乎原地踏步（灰色线），中间经历了 2015 股灾、2018 贸易战、2022 疫情
 - 股债 30/70（蓝色线）靠国债平滑了波动，但收益只比沪深300好一点点
@@ -49,7 +49,7 @@
 
 策略好不好，不能只看一个时间段。我们用 3 个不重叠的 10 年窗口验证：
 
-![滚动窗口](results/images/cn_permanent_rolling.png)
+![滚动窗口](images/cn_permanent_rolling.png)
 
 | 窗口 | 永久组合 | 沪深300 | 超额 | 永久组合回撤 | 沪深300回撤 |
 |------|---------|---------|------|------------|------------|
@@ -65,7 +65,7 @@
 
 ## 四、多久调一次仓？
 
-![再平衡频率](results/images/cn_permanent_rebalance_freq.png)
+![再平衡频率](images/cn_permanent_rebalance_freq.png)
 
 | 频率 | 年化 | 回撤 | Sortino | 操作难度 |
 |------|------|------|---------|---------|
@@ -79,7 +79,7 @@
 
 ## 五、定投 vs 一次性投入
 
-![定投初始比例](results/images/cn_permanent_dca_initial.png)
+![定投初始比例](images/cn_permanent_dca_initial.png)
 
 以 2016-2025 窗口为例，总额 100 万，不同初始投入比例的效果：
 
