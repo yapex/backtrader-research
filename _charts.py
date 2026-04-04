@@ -442,34 +442,34 @@ html = f"""<!DOCTYPE html>
   <div class="card">
     <h2>四策略总览</h2>
     <table>
-      <tr><th>策略</th><th>投入方式</th><th>总资金年化</th><th>最大回撤</th><th>超额收益</th><th>跑赢基准</th></tr>
+      <tr><th>策略</th><th>投入方式</th><th>总资金年化</th><th>最大回撤</th><th>超额收益</th><th>沪深300</th></tr>
       <tr class="highlight">
         <td><strong>永久组合</strong></td><td>一次性</td>
         <td><strong>{m_perm_lump["annual_return"]*100:+.2f}%</strong></td>
         <td>{m_perm_lump["max_drawdown"]*100:.1f}%</td>
         <td style="color:{'#27AE60' if m_perm_lump['excess_return']>=0 else '#E74C3C'}">{m_perm_lump["excess_return"]*100:+.2f}%</td>
-        <td>{'<span class="pass">✅</span>' if m_perm_lump["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
+        <td>{m_perm_lump["benchmark_return"]*100:+.2f}%</td>
       </tr>
       <tr>
         <td>股债 30/70</td><td>一次性</td>
         <td>{m_sb_lump["annual_return"]*100:+.2f}%</td>
         <td>{m_sb_lump["max_drawdown"]*100:.1f}%</td>
         <td style="color:{'#27AE60' if m_sb_lump['excess_return']>=0 else '#E74C3C'}">{m_sb_lump["excess_return"]*100:+.2f}%</td>
-        <td>{'<span class="pass">✅</span>' if m_sb_lump["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
+        <td>{m_sb_lump["benchmark_return"]*100:+.2f}%</td>
       </tr>
       <tr>
         <td>永久组合</td><td>定投</td>
         <td>{m_perm_dca["capital_return_annualized"]*100:+.2f}%</td>
         <td>{m_perm_dca["max_drawdown"]*100:.1f}%</td>
         <td style="color:{'#27AE60' if m_perm_dca['excess_return']>=0 else '#E74C3C'}">{m_perm_dca["excess_return"]*100:+.2f}%</td>
-        <td>{'<span class="pass">✅</span>' if m_perm_dca["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
+        <td>{m_perm_dca["benchmark_return"]*100:+.2f}%</td>
       </tr>
       <tr>
         <td>股债 30/70</td><td>定投</td>
         <td>{m_sb_dca["capital_return_annualized"]*100:+.2f}%</td>
         <td>{m_sb_dca["max_drawdown"]*100:.1f}%</td>
         <td style="color:{'#27AE60' if m_sb_dca['excess_return']>=0 else '#E74C3C'}">{m_sb_dca["excess_return"]*100:+.2f}%</td>
-        <td>{'<span class="pass">✅</span>' if m_sb_dca["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
+        <td>{m_sb_dca["benchmark_return"]*100:+.2f}%</td>
       </tr>
     </table>
     <div class="note">
