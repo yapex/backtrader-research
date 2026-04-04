@@ -32,6 +32,11 @@ BASE = {
     "params": {"rebalance_freq": "monthly", "stop_loss": None},
 }
 
+SB_ASSETS = [
+    {"ticker": "510300.SS", "role": "equity", "weight": 0.3},
+    {"ticker": "511010.SS", "role": "bond", "weight": 0.7},
+]
+
 COMMISSION = get_commission("CNY")
 COLORS = {"permanent": "#E67E22", "stockbond": "#3498DB", "benchmark": "#95A5A6"}
 
@@ -46,10 +51,6 @@ def normalize(series, base=100):
     return series / series.iloc[0] * base
 
 
-def pct_fmt(v):
-    return f"{v*100:+.2f}%"
-
-
 # ======================================================================
 # Run all backtests
 # ======================================================================
@@ -58,25 +59,19 @@ print("Running backtests...")
 period_full = {"start": "2014-01-01", "end": "2025-12-31"}
 period_short = {"start": "2016-01-01", "end": "2025-12-31"}
 
-# Lump sum configs
+# ---- 4 base configs (策略 × 投入方式) ----
 perm_lump = copy.deepcopy(BASE)
 perm_lump["period"] = period_full
 perm_lump["cash"] = 1000000
 perm_lump["deposits"] = {"total_capital": 0}
 
 sb_lump = copy.deepcopy(BASE)
-sb_lump["assets"] = [
-    {"ticker": "510300.SS", "role": "equity", "weight": 0.3},
-    {"ticker": "511010.SS", "role": "bond", "weight": 0.7},
-]
+sb_lump["assets"] = SB_ASSETS
 sb_lump["params"] = {"rebalance_freq": "yearly", "stop_loss": None}
 sb_lump["period"] = period_full
 sb_lump["cash"] = 1000000
 sb_lump["deposits"] = {"total_capital": 0}
 
-bench_full = _get_benchmark("510300.SS", period_full, 100000, COMMISSION)
-
-# DCA configs
 perm_dca = copy.deepcopy(BASE)
 perm_dca["period"] = period_full
 perm_dca["deposits"] = {
@@ -96,61 +91,134 @@ m_sb_lump = run_backtest(sb_lump, sb_lump)
 m_perm_dca = run_backtest(perm_dca, perm_dca)
 m_sb_dca = run_backtest(sb_dca, sb_dca)
 
+bench_full = _get_benchmark("510300.SS", period_full, 100000, COMMISSION)
+
 p_perm = normalize(get_portfolio(perm_lump, perm_lump))
 p_sb = normalize(get_portfolio(sb_lump, sb_lump))
 p_bench = normalize(bench_full)
 
-# Rolling windows
+# ======================================================================
+# Rolling windows — BOTH strategies
+# ======================================================================
 windows = [("2014-2023", "2014-01-01", "2023-12-31"),
            ("2015-2024", "2015-01-01", "2024-12-31"),
            ("2016-2025", "2016-01-01", "2025-12-31")]
-rolling_data = {"labels": [], "perm_ret": [], "bench_ret": [], "perm_dd": [], "bench_dd": []}
+
+rolling_data = {
+    "labels": [],
+    "perm_ret": [], "sb_ret": [], "bench_ret": [],
+    "perm_dd": [], "sb_dd": [], "bench_dd": [],
+}
+
 for label, s, e in windows:
-    cfg = copy.deepcopy(BASE)
-    cfg["period"] = {"start": s, "end": e}
-    cfg["cash"] = 1000000
-    cfg["deposits"] = {"total_capital": 0}
-    m = run_backtest(cfg, cfg)
+    # 永久组合
+    cfg_p = copy.deepcopy(BASE)
+    cfg_p["period"] = {"start": s, "end": e}
+    cfg_p["cash"] = 1000000
+    cfg_p["deposits"] = {"total_capital": 0}
+    mp = run_backtest(cfg_p, cfg_p)
+
+    # 股债30/70
+    cfg_s = copy.deepcopy(BASE)
+    cfg_s["assets"] = SB_ASSETS
+    cfg_s["params"] = {"rebalance_freq": "yearly", "stop_loss": None}
+    cfg_s["period"] = {"start": s, "end": e}
+    cfg_s["cash"] = 1000000
+    cfg_s["deposits"] = {"total_capital": 0}
+    ms = run_backtest(cfg_s, cfg_s)
+
     b = _get_benchmark("510300.SS", {"start": s, "end": e}, 100000, COMMISSION)
+
     rolling_data["labels"].append(label)
-    rolling_data["perm_ret"].append(m["annual_return"] * 100)
+    rolling_data["perm_ret"].append(mp["annual_return"] * 100)
+    rolling_data["sb_ret"].append(ms["annual_return"] * 100)
     rolling_data["bench_ret"].append(_annual_return(b) * 100)
-    rolling_data["perm_dd"].append(m["max_drawdown"] * 100)
+    rolling_data["perm_dd"].append(mp["max_drawdown"] * 100)
+    rolling_data["sb_dd"].append(ms["max_drawdown"] * 100)
     rolling_data["bench_dd"].append(_max_drawdown(b) * 100)
 
-# Rebalance freq
-freq_data = {"labels": [], "ret": [], "dd": [], "sortino": []}
-for freq, freq_label in [("monthly", "月度"), ("quarterly", "季度"), ("yearly", "年度")]:
-    cfg = copy.deepcopy(BASE)
-    cfg["period"] = period_short
-    cfg["params"]["rebalance_freq"] = freq
-    cfg["cash"] = 1000000
-    cfg["deposits"] = {"total_capital": 0}
-    m = run_backtest(cfg, cfg)
-    freq_data["labels"].append(freq_label)
-    freq_data["ret"].append(m["annual_return"] * 100)
-    freq_data["dd"].append(m["max_drawdown"] * 100)
-    freq_data["sortino"].append(m["sortino"])
+# ======================================================================
+# Rebalance freq — BOTH strategies
+# ======================================================================
+freq_data = {
+    "labels": [],
+    "perm_ret": [], "perm_dd": [], "perm_sortino": [],
+    "sb_ret": [], "sb_dd": [], "sb_sortino": [],
+}
 
-# DCA initial %
-dca_data = {"labels": [], "ret": [], "dd": [], "gain": []}
+for freq, freq_label in [("monthly", "月度"), ("quarterly", "季度"), ("yearly", "年度")]:
+    # 永久组合
+    cfg_p = copy.deepcopy(BASE)
+    cfg_p["period"] = period_short
+    cfg_p["params"]["rebalance_freq"] = freq
+    cfg_p["cash"] = 1000000
+    cfg_p["deposits"] = {"total_capital": 0}
+    mp = run_backtest(cfg_p, cfg_p)
+
+    # 股债30/70
+    cfg_s = copy.deepcopy(BASE)
+    cfg_s["assets"] = SB_ASSETS
+    cfg_s["params"] = {"rebalance_freq": freq, "stop_loss": None}
+    cfg_s["period"] = period_short
+    cfg_s["cash"] = 1000000
+    cfg_s["deposits"] = {"total_capital": 0}
+    ms = run_backtest(cfg_s, cfg_s)
+
+    freq_data["labels"].append(freq_label)
+    freq_data["perm_ret"].append(mp["annual_return"] * 100)
+    freq_data["perm_dd"].append(mp["max_drawdown"] * 100)
+    freq_data["perm_sortino"].append(mp["sortino"])
+    freq_data["sb_ret"].append(ms["annual_return"] * 100)
+    freq_data["sb_dd"].append(ms["max_drawdown"] * 100)
+    freq_data["sb_sortino"].append(ms["sortino"])
+
+# ======================================================================
+# DCA initial % — BOTH strategies
+# ======================================================================
+dca_data = {
+    "labels": [],
+    "perm_ret": [], "perm_dd": [], "perm_gain": [],
+    "sb_ret": [], "sb_dd": [], "sb_gain": [],
+}
+
 for pct in [0, 25, 50, 75, 100]:
-    cfg = copy.deepcopy(BASE)
-    cfg["period"] = period_short
+    # 永久组合
+    cfg_p = copy.deepcopy(BASE)
+    cfg_p["period"] = period_short
     if pct == 100:
-        cfg["cash"] = 1000000
-        cfg["deposits"] = {"total_capital": 0}
+        cfg_p["cash"] = 1000000
+        cfg_p["deposits"] = {"total_capital": 0}
     else:
-        cfg["deposits"] = {
+        cfg_p["deposits"] = {
             "total_capital": 1000000, "initial": int(1000000 * pct / 100),
             "freq": "monthly", "day": 1, "day_mode": "first",
         }
-    m = run_backtest(cfg, cfg)
-    cap_ret = m["capital_return_annualized"] if m["deposit_count"] > 0 else m["annual_return"]
+    mp = run_backtest(cfg_p, cfg_p)
+    perm_cap_ret = mp["capital_return_annualized"] if mp["deposit_count"] > 0 else mp["annual_return"]
+
+    # 股债30/70
+    cfg_s = copy.deepcopy(BASE)
+    cfg_s["assets"] = SB_ASSETS
+    cfg_s["params"] = {"rebalance_freq": "yearly", "stop_loss": None}
+    cfg_s["period"] = period_short
+    if pct == 100:
+        cfg_s["cash"] = 1000000
+        cfg_s["deposits"] = {"total_capital": 0}
+    else:
+        cfg_s["deposits"] = {
+            "total_capital": 1000000, "initial": int(1000000 * pct / 100),
+            "freq": "monthly", "day": 1, "day_mode": "first",
+        }
+    ms = run_backtest(cfg_s, cfg_s)
+    sb_cap_ret = ms["capital_return_annualized"] if ms["deposit_count"] > 0 else ms["annual_return"]
+
     dca_data["labels"].append(f"{pct}%" if pct < 100 else "一次性")
-    dca_data["ret"].append(cap_ret * 100)
-    dca_data["dd"].append(m["max_drawdown"] * 100)
-    dca_data["gain"].append((m["final_value"] - m["total_deposited"]) / 10000)
+    dca_data["perm_ret"].append(perm_cap_ret * 100)
+    dca_data["perm_dd"].append(mp["max_drawdown"] * 100)
+    dca_data["perm_gain"].append((mp["final_value"] - max(mp["total_deposited"], 1000000)) / 10000)
+    dca_data["sb_ret"].append(sb_cap_ret * 100)
+    dca_data["sb_dd"].append(ms["max_drawdown"] * 100)
+    dca_data["sb_gain"].append((ms["final_value"] - max(ms["total_deposited"], 1000000)) / 10000)
 
 print("Building charts...")
 
@@ -193,7 +261,6 @@ max_dds = [
 ]
 bar_colors = [COLORS["stockbond"], COLORS["permanent"], COLORS["stockbond"], COLORS["permanent"]]
 
-# Excess return vs benchmark
 bench_ret = m_perm_lump["benchmark_return"] * 100
 excess_rets = [
     m_sb_lump["excess_return"] * 100,
@@ -225,78 +292,119 @@ fig2.update_layout(
 )
 
 # ======================================================================
-# Chart 3: Rolling windows
+# Chart 3: Rolling windows — 永久组合 + 股债30/70 + 沪深300
 # ======================================================================
 fig3 = make_subplots(rows=1, cols=2, subplot_titles=("年化收益", "最大回撤"))
+
 fig3.add_trace(go.Bar(name="永久组合", x=rolling_data["labels"], y=rolling_data["perm_ret"],
                        marker_color=COLORS["permanent"],
                        text=[f"{v:.2f}%" for v in rolling_data["perm_ret"]], textposition="outside"),
+              row=1, col=1)
+fig3.add_trace(go.Bar(name="股债 30/70", x=rolling_data["labels"], y=rolling_data["sb_ret"],
+                       marker_color=COLORS["stockbond"],
+                       text=[f"{v:.2f}%" for v in rolling_data["sb_ret"]], textposition="outside"),
               row=1, col=1)
 fig3.add_trace(go.Bar(name="沪深300", x=rolling_data["labels"], y=rolling_data["bench_ret"],
                        marker_color=COLORS["benchmark"],
                        text=[f"{v:.2f}%" for v in rolling_data["bench_ret"]], textposition="outside"),
               row=1, col=1)
+
 fig3.add_trace(go.Bar(name="永久组合", x=rolling_data["labels"], y=rolling_data["perm_dd"],
                        marker_color=COLORS["permanent"], showlegend=False,
                        text=[f"{v:.1f}%" for v in rolling_data["perm_dd"]], textposition="outside"),
+              row=1, col=2)
+fig3.add_trace(go.Bar(name="股债 30/70", x=rolling_data["labels"], y=rolling_data["sb_dd"],
+                       marker_color=COLORS["stockbond"], showlegend=False,
+                       text=[f"{v:.1f}%" for v in rolling_data["sb_dd"]], textposition="outside"),
               row=1, col=2)
 fig3.add_trace(go.Bar(name="沪深300", x=rolling_data["labels"], y=rolling_data["bench_dd"],
                        marker_color=COLORS["benchmark"], showlegend=False,
                        text=[f"{v:.1f}%" for v in rolling_data["bench_dd"]], textposition="outside"),
               row=1, col=2)
+
 fig3.update_layout(
-    title="滚动窗口验证（3 个不重叠的 10 年）",
+    title="滚动窗口验证（3 个不重叠的 10 年，一次性投入）",
     barmode="group", height=450,
     legend=dict(orientation="h", yanchor="bottom", y=1.02),
     margin=dict(t=80, b=40),
 )
 
 # ======================================================================
-# Chart 4: Rebalance frequency
+# Chart 4: Rebalance freq — 永久组合 + 股债30/70 并排
 # ======================================================================
-fig4 = go.Figure()
-fig4.add_trace(go.Bar(name="年化收益", x=freq_data["labels"], y=freq_data["ret"],
-                       marker_color="#27AE60",
-                       text=[f"{v:.2f}%" for v in freq_data["ret"]], textposition="outside"))
-fig4.add_trace(go.Bar(name="最大回撤", x=freq_data["labels"], y=[-d for d in freq_data["dd"]],
-                       marker_color="#E74C3C",
-                       text=[f"-{d:.1f}%" for d in freq_data["dd"]], textposition="outside"))
-fig4.add_trace(go.Scatter(name="Sortino", x=freq_data["labels"], y=freq_data["sortino"],
-                           mode="lines+markers+text", text=[f"{v:.2f}" for v in freq_data["sortino"]],
-                           textposition="top center", line=dict(color="#3498DB", width=2),
-                           marker=dict(size=10)))
+fig4 = make_subplots(rows=1, cols=2, subplot_titles=("年化收益", "最大回撤"))
+
+fig4.add_trace(go.Bar(name="永久组合", x=freq_data["labels"], y=freq_data["perm_ret"],
+                       marker_color=COLORS["permanent"],
+                       text=[f"{v:.2f}%" for v in freq_data["perm_ret"]], textposition="outside"),
+              row=1, col=1)
+fig4.add_trace(go.Bar(name="股债 30/70", x=freq_data["labels"], y=freq_data["sb_ret"],
+                       marker_color=COLORS["stockbond"],
+                       text=[f"{v:.2f}%" for v in freq_data["sb_ret"]], textposition="outside"),
+              row=1, col=1)
+
+fig4.add_trace(go.Bar(name="永久组合", x=freq_data["labels"], y=freq_data["perm_dd"],
+                       marker_color=COLORS["permanent"], showlegend=False,
+                       text=[f"{v:.1f}%" for v in freq_data["perm_dd"]], textposition="outside"),
+              row=1, col=2)
+fig4.add_trace(go.Bar(name="股债 30/70", x=freq_data["labels"], y=freq_data["sb_dd"],
+                       marker_color=COLORS["stockbond"], showlegend=False,
+                       text=[f"{v:.1f}%" for v in freq_data["sb_dd"]], textposition="outside"),
+              row=1, col=2)
+
 fig4.update_layout(
-    title="再平衡频率对比（2016-2025）",
-    barmode="group", hovermode="x unified", height=450,
+    title="再平衡频率对比（2016-2025，一次性投入）",
+    barmode="group", height=450,
     legend=dict(orientation="h", yanchor="bottom", y=1.02),
     margin=dict(t=80, b=40),
-    yaxis_title="数值",
 )
 
 # ======================================================================
-# Chart 5: DCA initial % (dual axis)
+# Chart 5: DCA initial % — 永久组合 + 股债30/70 双线
 # ======================================================================
 fig5 = go.Figure()
-fig5.add_trace(go.Bar(
-    name="总资金年化回报", x=dca_data["labels"], y=dca_data["ret"],
-    marker_color=[COLORS["permanent"] if l != "一次性" else "#27AE60" for l in dca_data["labels"]],
-    text=[f"{v:.2f}%" for v in dca_data["ret"]], textposition="outside",
-    textfont=dict(size=13),
+fig5.add_trace(go.Scatter(
+    name="永久组合 总资金年化", x=dca_data["labels"], y=dca_data["perm_ret"],
+    mode="lines+markers+text", text=[f"{v:.2f}%" for v in dca_data["perm_ret"]],
+    textposition="top center", line=dict(color=COLORS["permanent"], width=2.5),
+    marker=dict(size=10),
 ))
 fig5.add_trace(go.Scatter(
-    name="最大回撤", x=dca_data["labels"], y=dca_data["dd"],
-    mode="lines+markers+text", text=[f"{v:.1f}%" for v in dca_data["dd"]],
-    textposition="bottom center", line=dict(color="#E74C3C", width=2.5),
-    marker=dict(size=10, color="#E74C3C"),
-    yaxis="y2",
+    name="股债 30/70 总资金年化", x=dca_data["labels"], y=dca_data["sb_ret"],
+    mode="lines+markers+text", text=[f"{v:.2f}%" for v in dca_data["sb_ret"]],
+    textposition="bottom center", line=dict(color=COLORS["stockbond"], width=2.5),
+    marker=dict(size=10),
 ))
 fig5.update_layout(
-    title="定投初始比例 vs 总资金回报（2016-2025，永久组合）",
-    hovermode="x unified", height=500,
+    title="定投初始比例 vs 总资金回报（2016-2025）",
+    hovermode="x unified", height=450,
     legend=dict(orientation="h", yanchor="bottom", y=1.02),
     margin=dict(t=80, b=40),
-    yaxis=dict(title="总资金年化回报 (%)", side="left"),
-    yaxis2=dict(title="最大回撤 (%)", side="right", overlaying="y", rangemode="tozero"),
+    yaxis=dict(title="总资金年化回报 (%)"),
+)
+
+# ======================================================================
+# Chart 6: DCA initial % — 回撤对比
+# ======================================================================
+fig6 = go.Figure()
+fig6.add_trace(go.Scatter(
+    name="永久组合 回撤", x=dca_data["labels"], y=dca_data["perm_dd"],
+    mode="lines+markers+text", text=[f"{v:.1f}%" for v in dca_data["perm_dd"]],
+    textposition="top center", line=dict(color=COLORS["permanent"], width=2.5),
+    marker=dict(size=10),
+))
+fig6.add_trace(go.Scatter(
+    name="股债 30/70 回撤", x=dca_data["labels"], y=dca_data["sb_dd"],
+    mode="lines+markers+text", text=[f"{v:.1f}%" for v in dca_data["sb_dd"]],
+    textposition="bottom center", line=dict(color=COLORS["stockbond"], width=2.5),
+    marker=dict(size=10),
+))
+fig6.update_layout(
+    title="定投初始比例 vs 最大回撤（2016-2025）",
+    hovermode="x unified", height=450,
+    legend=dict(orientation="h", yanchor="bottom", y=1.02),
+    margin=dict(t=80, b=40),
+    yaxis=dict(title="最大回撤 (%)"),
 )
 
 # ======================================================================
@@ -306,7 +414,7 @@ if "--png" in sys.argv:
     print("Exporting PNGs...")
     for fig, name in [(fig1, "cn_permanent_equity_curve"), (fig2, "cn_permanent_overview"),
                        (fig3, "cn_permanent_rolling"), (fig4, "cn_permanent_rebalance_freq"),
-                       (fig5, "cn_permanent_dca_initial")]:
+                       (fig5, "cn_permanent_dca_initial"), (fig6, "cn_permanent_dca_drawdown")]:
         fig.write_image(f"{OUT_DIR}/images/{name}.png", width=1100, height=500, scale=2)
         print(f"  [png] {name}.png")
 else:
@@ -324,11 +432,14 @@ for fig, section_id, title in [
     (fig3, "rolling", "滚动窗口验证"),
     (fig4, "rebalance", "再平衡频率"),
     (fig5, "dca", "定投 vs 一次性投入"),
+    (fig6, "dca_dd", "定投 vs 一次性投入（回撤）"),
 ]:
     div = fig.to_html(full_html=False, include_plotlyjs=False, div_id=section_id)
     html_charts += f'<div class="chart-section"><h2>{title}</h2>{div}</div>\n'
 
-# Summary table
+# ---- Tables ----
+
+# Overview table
 summary_rows = ""
 for name, ann, dd, excess, beat in [
     ("永久组合 一次性", m_perm_lump["annual_return"], m_perm_lump["max_drawdown"], m_perm_lump["excess_return"], m_perm_lump["beat_benchmark"]),
@@ -347,15 +458,48 @@ for name, ann, dd, excess, beat in [
       <td>{beat_str}</td>
     </tr>"""
 
-# DCA table
+# Rolling window table (both strategies)
+rolling_rows = ""
+for i, label in enumerate(rolling_data["labels"]):
+    perm_exc = rolling_data["perm_ret"][i] - rolling_data["bench_ret"][i]
+    sb_exc = rolling_data["sb_ret"][i] - rolling_data["bench_ret"][i]
+    rolling_rows += f"""
+    <tr>
+      <td>{label}</td>
+      <td>{rolling_data['perm_ret'][i]:.2f}%</td>
+      <td>{rolling_data['perm_dd'][i]:.1f}%</td>
+      <td>{rolling_data['sb_ret'][i]:.2f}%</td>
+      <td>{rolling_data['sb_dd'][i]:.1f}%</td>
+      <td>{rolling_data['bench_ret'][i]:.2f}%</td>
+      <td>{rolling_data['bench_dd'][i]:.1f}%</td>
+    </tr>"""
+
+# Rebalance freq table (both strategies)
+freq_rows = ""
+for i in range(len(freq_data["labels"])):
+    freq_rows += f"""
+    <tr>
+      <td>{freq_data['labels'][i]}</td>
+      <td>{freq_data['perm_ret'][i]:.2f}%</td>
+      <td>{freq_data['perm_dd'][i]:.1f}%</td>
+      <td>{freq_data['perm_sortino'][i]:.2f}</td>
+      <td>{freq_data['sb_ret'][i]:.2f}%</td>
+      <td>{freq_data['sb_dd'][i]:.1f}%</td>
+      <td>{freq_data['sb_sortino'][i]:.2f}</td>
+    </tr>"""
+
+# DCA table (both strategies)
 dca_rows = ""
 for i in range(5):
     dca_rows += f"""
     <tr>
       <td>{dca_data['labels'][i]}</td>
-      <td>{dca_data['ret'][i]:.2f}%</td>
-      <td>{dca_data['dd'][i]:.1f}%</td>
-      <td>+{dca_data['gain'][i]:.0f} 万</td>
+      <td>{dca_data['perm_ret'][i]:.2f}%</td>
+      <td>{dca_data['perm_dd'][i]:.1f}%</td>
+      <td>+{dca_data['perm_gain'][i]:.0f} 万</td>
+      <td>{dca_data['sb_ret'][i]:.2f}%</td>
+      <td>{dca_data['sb_dd'][i]:.1f}%</td>
+      <td>+{dca_data['sb_gain'][i]:.0f} 万</td>
     </tr>"""
 
 html = f"""<!DOCTYPE html>
@@ -433,43 +577,43 @@ html = f"""<!DOCTYPE html>
     <h2>🎯 核心结论</h2>
     <ul>
       <li><strong>最优配置：</strong>永久组合（沪深300 + 国债ETF + 黄金ETF + 货币基金，各 25%），月度再平衡</li>
-      <li><strong>最优投入方式：</strong>一次性投入 100 万<span class="badge">总资金年化 5.15%</span></li>
-      <li><strong>最大回撤：</strong>仅 -11.5%<span class="badge">沪深300 为 -45.0%</span></li>
-      <li><strong>100 万投入 12 年：</strong>期末约 183 万，总收益 +83%</li>
+      <li><strong>最优投入方式：</strong>一次性投入 100 万<span class="badge">年化 {m_perm_lump["annual_return"]*100:+.2f}%</span></li>
+      <li><strong>最大回撤：</strong>仅 {m_perm_lump["max_drawdown"]*100:.1f}%<span class="badge">沪深300 为 {m_perm_lump["benchmark_drawdown"]*100:.1f}%</span></li>
+      <li><strong>100 万投入 12 年：</strong>期末约 {m_perm_lump["final_value"]/10000:.0f} 万，总收益 +{(m_perm_lump["final_value"]-1000000)/1000000*100:.0f}%</li>
     </ul>
   </div>
 
   <div class="card">
     <h2>四策略总览</h2>
     <table>
-      <tr><th>策略</th><th>投入方式</th><th>总资金年化</th><th>最大回撤</th><th>超额收益</th><th>沪深300</th></tr>
+      <tr><th>策略</th><th>投入方式</th><th>总资金年化</th><th>最大回撤</th><th>超额收益</th><th>跑赢基准</th></tr>
       <tr class="highlight">
         <td><strong>永久组合</strong></td><td>一次性</td>
         <td><strong>{m_perm_lump["annual_return"]*100:+.2f}%</strong></td>
         <td>{m_perm_lump["max_drawdown"]*100:.1f}%</td>
         <td style="color:{'#27AE60' if m_perm_lump['excess_return']>=0 else '#E74C3C'}">{m_perm_lump["excess_return"]*100:+.2f}%</td>
-        <td>{m_perm_lump["benchmark_return"]*100:+.2f}%</td>
+        <td>{'<span class="pass">✅</span>' if m_perm_lump["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
       </tr>
       <tr>
         <td>股债 30/70</td><td>一次性</td>
         <td>{m_sb_lump["annual_return"]*100:+.2f}%</td>
         <td>{m_sb_lump["max_drawdown"]*100:.1f}%</td>
         <td style="color:{'#27AE60' if m_sb_lump['excess_return']>=0 else '#E74C3C'}">{m_sb_lump["excess_return"]*100:+.2f}%</td>
-        <td>{m_sb_lump["benchmark_return"]*100:+.2f}%</td>
+        <td>{'<span class="pass">✅</span>' if m_sb_lump["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
       </tr>
       <tr>
         <td>永久组合</td><td>定投</td>
         <td>{m_perm_dca["capital_return_annualized"]*100:+.2f}%</td>
         <td>{m_perm_dca["max_drawdown"]*100:.1f}%</td>
         <td style="color:{'#27AE60' if m_perm_dca['excess_return']>=0 else '#E74C3C'}">{m_perm_dca["excess_return"]*100:+.2f}%</td>
-        <td>{m_perm_dca["benchmark_return"]*100:+.2f}%</td>
+        <td>{'<span class="pass">✅</span>' if m_perm_dca["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
       </tr>
       <tr>
         <td>股债 30/70</td><td>定投</td>
         <td>{m_sb_dca["capital_return_annualized"]*100:+.2f}%</td>
         <td>{m_sb_dca["max_drawdown"]*100:.1f}%</td>
         <td style="color:{'#27AE60' if m_sb_dca['excess_return']>=0 else '#E74C3C'}">{m_sb_dca["excess_return"]*100:+.2f}%</td>
-        <td>{m_sb_dca["benchmark_return"]*100:+.2f}%</td>
+        <td>{'<span class="pass">✅</span>' if m_sb_dca["beat_benchmark"] else '<span class="fail">❌</span>'}</td>
       </tr>
     </table>
     <div class="note">
@@ -480,14 +624,32 @@ html = f"""<!DOCTYPE html>
   {html_charts}
 
   <div class="card">
+    <h2>滚动窗口验证（详细数据）</h2>
+    <p>3 个不重叠的 10 年窗口，一次性投入，永久组合用月度再平衡、股债30/70用年度再平衡：</p>
+    <table>
+      <tr><th>窗口</th><th>永久组合<br>年化</th><th>永久组合<br>回撤</th><th>股债30/70<br>年化</th><th>股债30/70<br>回撤</th><th>沪深300<br>年化</th><th>沪深300<br>回撤</th></tr>
+      {rolling_rows}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>再平衡频率对比（详细数据）</h2>
+    <p>2016-2025 窗口，一次性投入：</p>
+    <table>
+      <tr><th>频率</th><th>永久组合<br>年化</th><th>永久组合<br>回撤</th><th>永久组合<br>Sortino</th><th>股债30/70<br>年化</th><th>股债30/70<br>回撤</th><th>股债30/70<br>Sortino</th></tr>
+      {freq_rows}
+    </table>
+  </div>
+
+  <div class="card">
     <h2>定投 vs 一次性投入（详细数据）</h2>
     <p>2016-2025 窗口，总额 100 万：</p>
     <table>
-      <tr><th>初始投入</th><th>总资金年化</th><th>最大回撤</th><th>期末总收益</th></tr>
+      <tr><th>初始投入</th><th>永久组合<br>年化</th><th>永久组合<br>回撤</th><th>永久组合<br>期末收益</th><th>股债30/70<br>年化</th><th>股债30/70<br>回撤</th><th>股债30/70<br>期末收益</th></tr>
       {dca_rows}
     </table>
     <div class="note">
-      💡 一次性投入年化 6.18%，远高于纯定投的 3.88%。定投的真正价值是<strong>控制回撤</strong>（-6.0% vs -8.4%），而非提高收益。
+      💡 无论永久组合还是股债30/70，一次性投入的总资金年化都远高于定投。定投的真正价值是<strong>控制回撤</strong>，而非提高收益。
     </div>
   </div>
 
@@ -516,7 +678,7 @@ with open(f"{OUT_DIR}/cn_permanent_report.html", "w", encoding="utf-8") as f:
 print(f"  [html] cn_permanent_report.html")
 
 # ======================================================================
-# Generate Markdown report (auto from live data, no manual numbers)
+# Generate Markdown report
 # ======================================================================
 print("Building Markdown report...")
 
@@ -533,16 +695,18 @@ for name, method, ann, dd, exc in [
 
 md_rolling = ""
 for i, label in enumerate(rolling_data["labels"]):
-    md_rolling += f"| {label} | {rolling_data['perm_ret'][i]:.2f}% | {rolling_data['bench_ret'][i]:.2f}% | {rolling_data['perm_ret'][i]-rolling_data['bench_ret'][i]:+.2f}% | {rolling_data['perm_dd'][i]:.1f}% | {rolling_data['bench_dd'][i]:.1f}% |\n"
+    perm_exc = rolling_data["perm_ret"][i] - rolling_data["bench_ret"][i]
+    sb_exc = rolling_data["sb_ret"][i] - rolling_data["bench_ret"][i]
+    md_rolling += f"| {label} | {rolling_data['perm_ret'][i]:.2f}% | {rolling_data['perm_dd'][i]:.1f}% | {rolling_data['sb_ret'][i]:.2f}% | {rolling_data['sb_dd'][i]:.1f}% | {rolling_data['bench_ret'][i]:.2f}% | {rolling_data['bench_dd'][i]:.1f}% |\n"
 
 md_freq = ""
 for i in range(len(freq_data["labels"])):
-    md_freq += f"| {freq_data['labels'][i]} | {freq_data['ret'][i]:.2f}% | {freq_data['dd'][i]:.1f}% | {freq_data['sortino'][i]:.2f} |\n"
+    md_freq += f"| {freq_data['labels'][i]} | {freq_data['perm_ret'][i]:.2f}% | {freq_data['perm_dd'][i]:.1f}% | {freq_data['perm_sortino'][i]:.2f} | {freq_data['sb_ret'][i]:.2f}% | {freq_data['sb_dd'][i]:.1f}% | {freq_data['sb_sortino'][i]:.2f} |\n"
 
 md_dca = ""
 for i in range(5):
     bold = "**" if i == 0 or i == 4 else ""
-    md_dca += f"| {bold}{dca_data['labels'][i]}{bold} | {bold}{dca_data['ret'][i]:.2f}%{bold} | {bold}{dca_data['dd'][i]:.1f}%{bold} | {bold}+{dca_data['gain'][i]:.0f} 万{bold} |\n"
+    md_dca += f"| {bold}{dca_data['labels'][i]}{bold} | {bold}{dca_data['perm_ret'][i]:.2f}%{bold} | {bold}{dca_data['perm_dd'][i]:.1f}%{bold} | {bold}+{dca_data['perm_gain'][i]:.0f} 万{bold} | {bold}{dca_data['sb_ret'][i]:.2f}%{bold} | {bold}{dca_data['sb_dd'][i]:.1f}%{bold} | {bold}+{dca_data['sb_gain'][i]:.0f} 万{bold} |\n"
 
 md = f"""# A 股资产配置回测报告
 
@@ -593,22 +757,25 @@ md = f"""# A 股资产配置回测报告
 
 ## 三、滚动窗口验证
 
-策略好不好，不能只看一个时间段。我们用 3 个不重叠的 10 年窗口验证：
+策略好不好，不能只看一个时间段。我们用 3 个不重叠的 10 年窗口，同时验证永久组合和股债30/70（一次性投入）：
 
 ![滚动窗口](images/cn_permanent_rolling.png)
 
-| 窗口 | 永久组合 | 沪深300 | 超额 | 永久组合回撤 | 沪深300回撤 |
-|------|---------|---------|------|------------|------------|
+| 窗口 | 永久组合年化 | 永久组合回撤 | 股债30/70年化 | 股债30/70回撤 | 沪深300年化 | 沪深300回撤 |
+|------|------------|------------|-------------|-------------|-----------|-----------|
 {md_rolling}
 ---
 
 ## 四、多久调一次仓？
 
+2016-2025 窗口，两种策略 × 三种再平衡频率（一次性投入）：
+
 ![再平衡频率](images/cn_permanent_rebalance_freq.png)
 
-| 频率 | 年化 | 回撤 | Sortino | 操作难度 |
-|------|------|------|---------|--------|
-{md_freq}**结论：月度再平衡最优，年化最高、回撤最低。** 每月花几分钟把比例调回 25% 即可。
+| 频率 | 永久组合年化 | 永久组合回撤 | 永久组合Sortino | 股债30/70年化 | 股债30/70回撤 | 股债30/70Sortino |
+|------|------------|------------|---------------|-------------|-------------|---------------|
+{md_freq}
+**结论：** 无论哪种策略，月度再平衡的年化收益最高、回撤最低。
 
 ---
 
@@ -618,24 +785,24 @@ md = f"""# A 股资产配置回测报告
 
 手里有 100 万，怎么投收益最高？核心指标是**总资金年化回报**——从第 1 天就拥有 100 万，最终赚了多少，年化是多少。
 
-以 2016-2025 窗口为例，总额 100 万，不同初始投入比例的效果：
+以 2016-2025 窗口为例，总额 100 万，两种策略 × 五种初始投入比例：
 
 ![定投初始比例](images/cn_permanent_dca_initial.png)
 
-| 初始投入 | 总资金年化 | 最大回撤 | 期末总收益 |
-|---------|-----------|---------|----------|
+| 初始投入 | 永久组合年化 | 永久组合回撤 | 永久组合期末收益 | 股债30/70年化 | 股债30/70回撤 | 股债30/70期末收益 |
+|---------|------------|------------|---------------|-------------|-------------|---------------|
 {md_dca}
 结论很清楚：
-- **一次性投入年化 {dca_data['ret'][4]:.2f}%**，远高于纯定投的 {dca_data['ret'][0]:.2f}%
+- **一次性投入年化最高**（永久组合 {dca_data['perm_ret'][4]:.2f}%，股债30/70 {dca_data['sb_ret'][4]:.2f}%），远高于纯定投
 - 初始投入越多，总资金回报越高
-- 定投的真正价值是**控制回撤**（{dca_data['dd'][0]:.1f}% vs {dca_data['dd'][4]:.1f}%），而非提高收益
+- 定投的真正价值是**控制回撤**（永久组合 {dca_data['perm_dd'][0]:.1f}% vs {dca_data['perm_dd'][4]:.1f}%，股债30/70 {dca_data['sb_dd'][0]:.1f}% vs {dca_data['sb_dd'][4]:.1f}%），而非提高收益
 
 ### 选择建议
 
 | 场景 | 建议 | 原因 |
 |------|------|------|
-| 手里已有 100 万，追求收益 | **一次性投入** | 年化 {dca_data['ret'][4]:.2f}%，10 年多赚 {dca_data['gain'][4]-dca_data['gain'][0]:.0f} 万 |
-| 心理承受能力弱，怕大跌 | **先投 50%，剩余定投** | 回撤 {dca_data['dd'][2]:.1f}%，年化仍有 {dca_data['ret'][2]:.2f}% |
+| 手里已有 100 万，追求收益 | **一次性投入** | 年化最高，10 年多赚最多 |
+| 心理承受能力弱，怕大跌 | **先投 50%，剩余定投** | 回撤更低，年化仍有不错水平 |
 | 每月有固定收入，逐步积累 | **定投** | 虽然总资金回报低，但适合无存量资金的情况 |
 
 ---
