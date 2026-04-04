@@ -144,18 +144,15 @@ def _download_cn_index(ticker, start, end):
     return df.loc[(df.index >= pd.to_datetime(start)) & (df.index <= pd.to_datetime(end))]
 
 
-def _download_akshare(ticker, start, end):
-    import akshare as ak
-    code, suffix = ticker.split('.')[0], ticker.split('.')[-1].upper()
-    prefix = 'sh' if suffix in ('SS', 'SH') else 'sz'
-    df = ak.fund_etf_hist_sina(symbol=f"{prefix}{code}")
-    if df is None or df.empty:
-        raise ValueError(f"Cannot download {ticker}")
-    df = df.rename(columns={'date': 'Date', 'open': 'Open', 'high': 'High',
-                            'low': 'Low', 'close': 'Close', 'volume': 'Volume'})
-    df['Date'] = pd.to_datetime(df['Date'])
-    df = df.set_index('Date').sort_index()
-    return df.loc[(df.index >= pd.to_datetime(start)) & (df.index <= pd.to_datetime(end))]
+def _download_cn_etf(ticker, start, end):
+    """A-stock ETF: use yfinance auto-adjusted prices.
+
+    yfinance Close is dividend-adjusted by default (no separate Adj Close
+    column in newer versions). Raw prices from akshare/sina don't account
+    for dividends, which underestimates returns significantly.
+    """
+    df = _download_yahoo(ticker, start, end)
+    return df
 
 
 def load_data(tickers, start, end):
@@ -171,7 +168,7 @@ def load_data(tickers, start, end):
             if _is_cn_index(ticker):
                 df = _download_cn_index(ticker, start, end)
             elif _is_cn_ticker(ticker):
-                df = _download_akshare(ticker, start, end)
+                df = _download_cn_etf(ticker, start, end)
             else:
                 df = _download_yahoo(ticker, start, end)
             _data_cache.set(cache_key, pickle.dumps(df), expire=_DATA_TTL)
@@ -511,7 +508,7 @@ def _run_buyhold(data, cash, commission):
             self._bought = False
         def next(self):
             if not self._bought:
-                self.order_target_percent(self.datas[0], 0.999)
+                self.order_target_percent(self.datas[0], 0.98)
                 self._bought = True
 
     cerebro.addanalyzer(_Tracker, _name="tracker")

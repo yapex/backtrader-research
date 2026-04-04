@@ -1,9 +1,8 @@
-# A股 · 股债30/70 一次性投入
-# 最佳股债比例，年度再平衡，无止损
+# A股 · 股债30/70 定投
+# 总额100万，纯定投（初始0%），月度再平衡，无止损
 
 benchmark: 510300.SS
 currency: CNY
-cash: 100000
 
 assets:
   - ticker: 510300.SS
@@ -13,10 +12,17 @@ assets:
     role: bond
     weight: 0.7
 
+deposits:
+  total_capital: 1000000
+  initial: 0
+  freq: monthly
+  day: 1
+  day_mode: first
+
 period:
   start: "2014-01-01"
   end: "2025-12-31"
 
 params:
-  rebalance_freq: yearly
+  rebalance_freq: monthly
   stop_loss: null
