@@ -1,0 +1,25 @@
+benchmark: 510300.SS
+currency: CNY
+cash: 1000000
+
+assets:
+  - ticker: 510300.SS
+    role: equity
+    weight: 0.25
+  - ticker: 511010.SS
+    role: bond
+    weight: 0.25
+  - ticker: 518880.SS
+    role: gold
+    weight: 0.25
+  - ticker: 511990.SS
+    role: cash
+    weight: 0.25
+
+period:
+  start: "2014-01-01"
+  end: "2025-12-31"
+
+params:
+  rebalance_freq: never
+  rebalance_threshold: 0.07
