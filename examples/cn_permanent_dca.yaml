@@ -1,5 +1,5 @@
 # A股 · 永久组合定投
-# 总额100万，纯定投（初始0%），月度再平衡，无止损
+# 股票+债券+黄金+现金，各25%，纯定投，月度再平衡，无止损
 
 benchmark: 510300.SS
 currency: CNY
@@ -7,13 +7,16 @@ currency: CNY
 assets:
   - ticker: 510300.SS
     role: equity
-    weight: 0.3333
+    weight: 0.25
   - ticker: 511010.SS
     role: bond
-    weight: 0.3333
+    weight: 0.25
   - ticker: 518880.SS
     role: gold
-    weight: 0.3333
+    weight: 0.25
+  - ticker: 511990.SS
+    role: cash
+    weight: 0.25
 
 deposits:
   total_capital: 1000000
