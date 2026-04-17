@@ -96,11 +96,10 @@ class CNIndexProvider:
 
 
 class CNEtfProvider:
-    """Provider for Chinese ETFs via yfinance (dividend-adjusted prices).
+    """Provider for Chinese ETFs via akshare (Sina Finance).
 
     Handles: 510300.SS, 511010.SS, 518880.SS, etc. (51/15/13/50 codes).
-    Uses yfinance because it provides dividend-adjusted prices, which
-    akshare/sina don't account for.
+    Uses akshare instead of yfinance to avoid rate limiting on A-share ETFs.
     """
 
     def can_handle(self, ticker: str) -> bool:
@@ -110,7 +109,75 @@ class CNEtfProvider:
         )
 
     def download(self, ticker: str, start: str, end: str) -> pd.DataFrame:
-        return YahooProvider().download(ticker, start, end)
+        import akshare as ak
+
+        # Convert ticker format: 510300.SS -> sh510300
+        code = ticker.split(".")[0]
+        suffix = ticker.split(".")[-1].upper()
+        prefix = "sh" if suffix in ("SS", "SH") else "sz"
+        symbol = f"{prefix}{code}"
+
+        df = ak.fund_etf_hist_sina(symbol=symbol)
+        if df is None or df.empty:
+            raise ValueError(f"Cannot download {ticker}")
+        df = df.rename(
+            columns={
+                "date": "Date",
+                "open": "Open",
+                "high": "High",
+                "low": "Low",
+                "close": "Close",
+                "volume": "Volume",
+            }
+        )
+        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.set_index("Date").sort_index()
+        return df.loc[
+            (df.index >= pd.to_datetime(start))
+            & (df.index <= pd.to_datetime(end))
+        ]
+
+
+class USStockProvider:
+    """Provider for US stocks/ETFs via akshare (Sina Finance).
+
+    Handles: SPY, GLD, QQQ, etc. (US stock symbols without suffix).
+    Uses akshare.index_us_stock_sina() for US market data.
+    """
+
+    def can_handle(self, ticker: str) -> bool:
+        # US tickers: no suffix, or .US suffix
+        tl = ticker.lower()
+        return (
+            tl.endswith(".us") or
+            (not tl.endswith((".ss", ".sh", ".sz", ".de", ".jp")) and len(ticker) <= 5 and ticker.isupper())
+        )
+
+    def download(self, ticker: str, start: str, end: str) -> pd.DataFrame:
+        import akshare as ak
+
+        # Remove .US suffix if present
+        symbol = ticker.upper().replace(".US", "")
+
+        df = ak.index_us_stock_sina(symbol=symbol)
+        if df is None or df.empty:
+            raise ValueError(f"Cannot download {ticker}")
+        df = df.rename(
+            columns={
+                "date": "Date",
+                "open": "Open",
+                "high": "High",
+                "low": "Low",
+                "close": "Close",
+                "volume": "Volume",
+            }
+        )
+        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.set_index("Date").sort_index()
+        return df.loc[
+            (df.index >= pd.to_datetime(start))
+            & (df.index <= pd.to_datetime(end))
+        ]
 
 
 # ======================================================================
@@ -128,6 +195,7 @@ class DataLoader:
         self._providers: list[DataProvider] = providers or [
             CNIndexProvider(),
             CNEtfProvider(),
+            USStockProvider(),  # US stocks/ETFs via akshare (Sina)
             YahooProvider(),  # fallback, must be last
         ]
 
